@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Mattermost Alertas",
+  "version": "1.0.0",
+  "description": "Notificações em tempo real do Mattermost, com som — para máquinas onde o app desktop não avisa direito.",
+
+  "permissions": ["storage", "notifications", "alarms", "offscreen"],
+  "host_permissions": ["https://team.actuar.group/*"],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "options_page": "opcoes.html",
+
+  "action": {
+    "default_title": "Mattermost Alertas",
+    "default_popup": "popup.html"
+  },
+
+  "icons": {
+    "16": "icones/16.png",
+    "48": "icones/48.png",
+    "128": "icones/128.png"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "mm-notify",
+  "version": "1.0.0",
+  "description": "Notificações em tempo real do Mattermost para macOS — popup sobreposto + banner nativo + som",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "bin/mm-test",
+    "build": "bash mmpopup/build.sh"
+  }
+}

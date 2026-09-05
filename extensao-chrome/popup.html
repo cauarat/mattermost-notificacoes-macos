@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Mattermost Alertas</title>
+<style>
+  :root { color-scheme: light dark; --texto:#1a1d21; --suave:#5c6773; --fundo:#fff; --borda:#d8dde3; --caixa:#f6f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --texto:#e6e9ef; --suave:#9aa4b2; --fundo:#16181d; --borda:#2d323b; --caixa:#1b1e24; }
+  }
+  body { width: 268px; margin: 0; padding: 14px; background: var(--fundo); color: var(--texto);
+         font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .topo { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 10px; }
+  .bolinha { width: 9px; height: 9px; border-radius: 50%; background: #94a3b8; flex: none; }
+  .bolinha.conectado { background: #22c55e; }
+  .bolinha.conectando { background: #f59e0b; }
+  .bolinha.erro { background: #ef4444; }
+  .quem { color: var(--suave); font-size: 12px; margin-bottom: 12px; }
+  #log { background: var(--caixa); border: 1px solid var(--borda); border-radius: 7px;
+         padding: 8px; max-height: 168px; overflow-y: auto;
+         font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--suave); }
+  #log div { margin-bottom: 3px; word-break: break-word; }
+  button { width: 100%; margin-top: 10px; padding: 7px; border-radius: 6px;
+           border: 1px solid var(--borda); background: var(--caixa); color: var(--texto);
+           font: inherit; cursor: pointer; }
+  button:hover { border-color: #4c8dff; }
+</style>
+<div class="topo"><span class="bolinha" id="bolinha"></span><span id="estado">verificando…</span></div>
+<div class="quem" id="quem"></div>
+<div id="log"></div>
+<button id="opcoes">Abrir opções</button>
+<script src="popup.js" type="module"></script>
+</html>

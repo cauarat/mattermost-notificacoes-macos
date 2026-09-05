@@ -1,0 +1,87 @@
+#!/usr/bin/env node
+// Dispara um alerta de teste, sem depender do daemon nem do servidor.
+// Valida as camadas visual e sonora isoladamente.
+//
+//   bin/mm-test                  → alerta de mensagem direta
+//   bin/mm-test --tipo mencao    → alerta de menção
+//   bin/mm-test --tipo canal     → alerta de canal monitorado
+//   bin/mm-test --todos          → os três em sequência (testa empilhamento)
+import { carregarConfig } from "../src/config.js";
+import { montarAlerta } from "../src/enrich.js";
+import { iniciarPopup, enviarAlerta, pararPopup } from "../src/alert.js";
+
+const cfg = carregarConfig();
+const args = process.argv.slice(2);
+
+const pegar = (flag) => {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : null;
+};
+
+const EXEMPLOS = {
+  dm: {
+    remetente: "Ana Ribeiro",
+    canal: "Mensagem direta",
+    texto: "Oi! Consegue olhar o relatório do fechamento hoje ainda?",
+    tipoCanal: "D",
+  },
+  mencao: {
+    remetente: "João Silva",
+    canal: "Financeiro",
+    texto: "@cauatoledo pode confirmar os números da planilha antes da reunião?",
+    tipoCanal: "O",
+  },
+  canal: {
+    remetente: "Marina Costa",
+    canal: "Avisos Gerais",
+    texto: "Lembrete: o sistema ficará indisponível para manutenção às 22h.",
+    tipoCanal: "O",
+  },
+};
+
+function alertaDe(tipo) {
+  const ex = EXEMPLOS[tipo] ?? EXEMPLOS.dm;
+  return montarAlerta({
+    tipo,
+    post: { message: ex.texto },
+    data: {
+      sender_name: ex.remetente,
+      channel_type: ex.tipoCanal,
+      channel_display_name: ex.canal,
+      channel_name: "teste",
+    },
+    servidor: cfg.servidor,
+    time: null,
+    cfg,
+  });
+}
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const principal = async () => {
+  iniciarPopup();
+  await espera(600); // deixa o app subir antes do primeiro alerta
+
+  const tipos = args.includes("--todos")
+    ? ["dm", "mencao", "canal"]
+    : [pegar("--tipo") ?? "dm"];
+
+  for (const tipo of tipos) {
+    if (!EXEMPLOS[tipo]) {
+      console.error(`Tipo inválido: ${tipo}. Use dm, mencao ou canal.`);
+      process.exit(1);
+    }
+    const a = alertaDe(tipo);
+    console.log(`→ [${tipo}] ${a.remetente}: ${a.corpo}  (som: ${a.som})`);
+    enviarAlerta(a);
+    await espera(1200);
+  }
+
+  // Mantém o processo vivo enquanto os popups estão na tela.
+  const vida = (cfg.duracaoPopupSegundos + 3) * 1000;
+  console.log(`\nAguardando ${Math.round(vida / 1000)}s até os popups sumirem…`);
+  await espera(vida);
+  pararPopup();
+};
+
+principal();

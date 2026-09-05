@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Mattermost Alertas — Opções</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fundo: #ffffff; --texto: #1a1d21; --suave: #5c6773;
+    --borda: #d8dde3; --campo: #ffffff; --acento: #1f6feb;
+    --ok: #16a34a; --erro: #dc2626; --caixa: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #16181d; --texto: #e6e9ef; --suave: #9aa4b2;
+      --borda: #2d323b; --campo: #1e2127; --acento: #4c8dff;
+      --caixa: #1b1e24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px; background: var(--fundo); color: var(--texto);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--suave); margin: 0 0 28px; }
+  fieldset { border: 1px solid var(--borda); border-radius: 10px; padding: 18px 20px; margin: 0 0 20px; }
+  legend { padding: 0 8px; font-weight: 600; font-size: 13px; }
+  label { display: block; margin: 14px 0 6px; font-weight: 500; font-size: 13px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=password], textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--borda); border-radius: 7px;
+    background: var(--campo); color: var(--texto); font: inherit;
+  }
+  textarea { min-height: 72px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  input:focus, textarea:focus { outline: 2px solid var(--acento); outline-offset: -1px; border-color: transparent; }
+  .linha { display: flex; align-items: center; gap: 9px; margin: 12px 0; }
+  .linha label { margin: 0; font-weight: 400; }
+  .dica { color: var(--suave); font-size: 12px; margin: 6px 0 0; }
+  button {
+    padding: 9px 18px; border-radius: 7px; border: 1px solid var(--borda);
+    background: var(--caixa); color: var(--texto); font: inherit; font-weight: 500; cursor: pointer;
+  }
+  button:hover { border-color: var(--acento); }
+  button.principal { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .botoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #recado { margin-top: 14px; font-size: 13px; min-height: 20px; }
+  .ok { color: var(--ok); } .erro { color: var(--erro); }
+  input[type=range] { width: 100%; }
+</style>
+
+<main>
+  <h1>Mattermost Alertas</h1>
+  <p class="sub">Notificações em tempo real, para máquinas onde o app desktop não avisa direito.</p>
+
+  <fieldset>
+    <legend>Conta</legend>
+    <label for="servidor">Servidor</label>
+    <input id="servidor" type="text" placeholder="https://team.actuar.group">
+
+    <label for="login">E-mail ou usuário</label>
+    <input id="login" type="text" autocomplete="username">
+
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="current-password">
+    <p class="dica">
+      Guardada no armazenamento do Chrome, que é menos protegido que o Keychain
+      do macOS. Use em máquinas suas e confiáveis. Sem ela, você precisa refazer
+      o login toda vez que a sessão expirar (cerca de 30 dias).
+    </p>
+
+    <div class="botoes" style="margin-top:16px">
+      <button id="entrar" class="principal">Entrar e conectar</button>
+      <button id="sair">Sair e apagar dados</button>
+    </div>
+    <div id="recado"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>O que gera alerta</legend>
+    <p class="dica" style="margin-top:0">
+      Mensagens diretas e menções a você alertam sempre. Abaixo, canais que
+      devem alertar mesmo sem menção — um por linha.
+    </p>
+    <label for="canais">Canais monitorados</label>
+    <textarea id="canais" placeholder="financeiro&#10;Avisos Gerais"></textarea>
+    <p class="dica">Aceita o nome interno (<code>financeiro</code>) ou o exibido (<code>Financeiro</code>).</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Som e funcionamento</legend>
+    <div class="linha">
+      <input type="checkbox" id="ativado">
+      <label for="ativado">Extensão ligada</label>
+    </div>
+    <div class="linha">
+      <input type="checkbox" id="somAtivado">
+      <label for="somAtivado">Tocar som nos alertas</label>
+    </div>
+    <label for="volume">Volume do alerta</label>
+    <input type="range" id="volume" min="0" max="1" step="0.05">
+    <div class="botoes" style="margin-top:14px">
+      <button data-testar="dm">Testar mensagem direta</button>
+      <button data-testar="mencao">Testar menção</button>
+      <button data-testar="canal">Testar canal</button>
+    </div>
+  </fieldset>
+
+  <div class="botoes">
+    <button id="salvar" class="principal">Salvar</button>
+    <button id="reconectar">Reconectar agora</button>
+  </div>
+</main>
+<script src="opcoes.js" type="module"></script>
+</html>

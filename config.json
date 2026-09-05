@@ -1,0 +1,21 @@
+{
+  "servidor": "https://team.actuar.group",
+  "canaisMonitorados": [],
+  "duracaoPopupSegundos": 12,
+  "notificacaoNativa": true,
+  "posicao": "superior-direito",
+  "som": {
+    "ativado": true,
+    "volume": 0.8,
+    "porTipo": {
+      "dm": "Hero",
+      "mencao": "Glass",
+      "canal": "Tink"
+    },
+    "insistir": {
+      "ativado": false,
+      "intervaloSegundos": 4,
+      "maximo": 3
+    }
+  }
+}

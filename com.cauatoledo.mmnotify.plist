@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cauatoledo.mmnotify</string>
+
+    <!-- Caminho absoluto: o launchd não herda o PATH do shell. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/node</string>
+        <string>/Users/cauatoledo/mm-notify/src/index.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/cauatoledo/mm-notify</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Se cair, o macOS relança. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Espera crescente entre relançamentos, para não entrar em loop apertado
+         se o servidor estiver fora do ar. -->
+    <key>ThrottleInterval</key>
+    <integer>15</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/cauatoledo/mm-notify/logs/mm-notify.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cauatoledo/mm-notify/logs/mm-notify.err</string>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

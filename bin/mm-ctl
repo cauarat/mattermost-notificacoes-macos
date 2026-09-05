@@ -1,0 +1,112 @@
+#!/bin/bash
+# Controle do daemon mm-notify.
+#   mm-ctl start | stop | restart | status | logs | instalar | desinstalar
+set -uo pipefail
+
+# Resolve symlinks antes de calcular a raiz: chamado via ~/.local/bin/mm-ctl,
+# um dirname simples apontaria para ~/.local e o script não acharia o projeto.
+ORIGEM="${BASH_SOURCE[0]}"
+while [ -L "$ORIGEM" ]; do
+  ALVO="$(readlink "$ORIGEM")"
+  case "$ALVO" in
+    /*) ORIGEM="$ALVO" ;;
+    *)  ORIGEM="$(dirname "$ORIGEM")/$ALVO" ;;
+  esac
+done
+RAIZ="$(cd "$(dirname "$ORIGEM")/.." && pwd)"
+
+# Como o usuário chama este script: nome curto se estiver no PATH.
+if command -v mm-ctl >/dev/null 2>&1; then EU="mm-ctl"; else EU="$ORIGEM"; fi
+ROTULO="com.cauatoledo.mmnotify"
+PLIST_ORIGEM="$RAIZ/$ROTULO.plist"
+PLIST_DESTINO="$HOME/Library/LaunchAgents/$ROTULO.plist"
+LOG="$RAIZ/logs/mm-notify.log"
+ERR="$RAIZ/logs/mm-notify.err"
+UID_ATUAL="$(id -u)"
+
+carregado() { launchctl print "gui/$UID_ATUAL/$ROTULO" >/dev/null 2>&1; }
+
+case "${1:-status}" in
+  instalar)
+    mkdir -p "$HOME/Library/LaunchAgents"
+    cp "$PLIST_ORIGEM" "$PLIST_DESTINO"
+    # Descarrega o serviço anterior e ESPERA sumir de verdade. Sem esta espera
+    # o bootstrap seguinte falha com "Input/output error", porque o launchd
+    # ainda considera o rótulo em uso.
+    launchctl bootout "gui/$UID_ATUAL/$ROTULO" 2>/dev/null
+    for _ in $(seq 1 20); do
+      carregado || break
+      sleep 0.25
+    done
+
+    if launchctl bootstrap "gui/$UID_ATUAL" "$PLIST_DESTINO" 2>/tmp/mmctl-erro.$$; then
+      echo "✓ Instalado e iniciado. Vai subir sozinho a cada login."
+    else
+      echo "✗ Falha ao instalar o LaunchAgent:"
+      sed 's/^/    /' /tmp/mmctl-erro.$$
+      echo "    Se disser que já está carregado, rode: $EU restart"
+      rm -f /tmp/mmctl-erro.$$
+      exit 1
+    fi
+    rm -f /tmp/mmctl-erro.$$
+    ;;
+
+  desinstalar)
+    launchctl bootout "gui/$UID_ATUAL/$ROTULO" 2>/dev/null
+    rm -f "$PLIST_DESTINO"
+    echo "✓ Removido. Não sobe mais no login."
+    ;;
+
+  start)
+    if [ ! -f "$PLIST_DESTINO" ]; then
+      echo "LaunchAgent não instalado. Rode primeiro:"; echo "  $EU instalar"; exit 1
+    fi
+    launchctl kickstart "gui/$UID_ATUAL/$ROTULO" && echo "✓ Iniciado."
+    ;;
+
+  stop)
+    launchctl kill SIGTERM "gui/$UID_ATUAL/$ROTULO" 2>/dev/null \
+      && echo "✓ Parado (o launchd vai relançar; use 'desinstalar' para desligar de vez)." \
+      || echo "Não estava rodando."
+    ;;
+
+  restart)
+    launchctl kickstart -k "gui/$UID_ATUAL/$ROTULO" && echo "✓ Reiniciado."
+    ;;
+
+  status)
+    echo "mm-notify"
+    echo "  raiz:        $RAIZ"
+    if [ -f "$PLIST_DESTINO" ]; then echo "  LaunchAgent: instalado"; else echo "  LaunchAgent: NÃO instalado (rode: $EU instalar)"; fi
+    if carregado; then
+      pid="$(launchctl print "gui/$UID_ATUAL/$ROTULO" 2>/dev/null | awk '/^\tpid = /{print $3}')"
+      echo "  daemon:      rodando${pid:+ (pid $pid)}"
+    else
+      echo "  daemon:      parado"
+    fi
+    if pgrep -f "MMPopup.app/Contents/MacOS/MMPopup" >/dev/null 2>&1; then
+      echo "  popup:       rodando"
+    else
+      echo "  popup:       parado"
+    fi
+    if [ -f "$RAIZ/mmpopup/MMPopup.app/Contents/MacOS/MMPopup" ]; then
+      echo "  MMPopup.app: compilado"
+    else
+      echo "  MMPopup.app: NÃO compilado (rode: bash mmpopup/build.sh)"
+    fi
+    echo ""
+    echo "  últimas linhas do log:"
+    tail -n 8 "$LOG" 2>/dev/null | sed 's/^/    /' || echo "    (sem log ainda)"
+    ;;
+
+  logs)
+    echo "Acompanhando $LOG  (Ctrl-C para sair)"
+    touch "$LOG" "$ERR"
+    tail -n 40 -f "$LOG" "$ERR"
+    ;;
+
+  *)
+    echo "uso: $EU {instalar|desinstalar|start|stop|restart|status|logs}"
+    exit 1
+    ;;
+esac

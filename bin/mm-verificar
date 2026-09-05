@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+// Verifica a cadeia inteira de notificação, de ponta a ponta.
+//
+// Manda uma mensagem de verdade pelo servidor Mattermost e confere se ela
+// percorre todo o caminho: servidor → WebSocket → daemon → filtro → popup.
+// Usa a marca de autoteste de src/filter.js para driblar a regra que descarta
+// as próprias mensagens, então não depende de outra pessoa estar disponível.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { carregarConfig, RAIZ } from "../src/config.js";
+import { MARCA_TESTE } from "../src/filter.js";
+import * as kc from "../src/keychain.js";
+
+const executar = promisify(execFile);
+const cfg = carregarConfig();
+const LOG = join(RAIZ, "logs", "mm-notify.log");
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+const ok = (m) => console.log(`  ✓ ${m}`);
+const falha = (m) => console.log(`  ✗ ${m}`);
+const info = (m) => console.log(`    ${m}`);
+
+let problemas = 0;
+const exigir = (condicao, bom, ruim) => {
+  condicao ? ok(bom) : (falha(ruim), problemas++);
+  return condicao;
+};
+
+const lerLog = () => { try { return readFileSync(LOG, "utf8"); } catch { return ""; } };
+
+console.log("\n  Verificação do mm-notify\n  " + "─".repeat(44) + "\n");
+
+// 1 — o daemon está de pé?
+console.log("  1. Daemon");
+let rodando = false;
+try {
+  const { stdout } = await executar("/bin/ps", ["-Ao", "pid,command"]);
+  rodando = stdout.includes("mm-notify/src/index.js");
+} catch {}
+exigir(rodando, "processo rodando", "processo NÃO está rodando — rode: mm-ctl restart");
+
+// 2 — conectou no Mattermost?
+console.log("\n  2. Conexão com o Mattermost");
+const log = lerLog();
+const ultimaConexao = log.lastIndexOf("Conectado e autenticado");
+const ultimaQueda = Math.max(log.lastIndexOf("Conexão perdida"), log.lastIndexOf("inalcançável"));
+exigir(ultimaConexao !== -1, "já autenticou no servidor", "nunca autenticou — veja: mm-ctl logs");
+exigir(ultimaConexao > ultimaQueda, "conexão ativa agora", "a última coisa no log foi uma queda");
+
+// 3 — o app de popup está compilado e vivo?
+console.log("\n  3. Popup");
+let popupVivo = false;
+try {
+  const { stdout } = await executar("/bin/ps", ["-Ao", "command"]);
+  popupVivo = stdout.includes("MMPopup.app/Contents/MacOS/MMPopup");
+} catch {}
+exigir(popupVivo, "MMPopup rodando", "MMPopup não está rodando (sobe no primeiro alerta)");
+
+// 4 — o Keychain responde sem pedir senha?
+console.log("\n  4. Keychain");
+const t0 = Date.now();
+const token = await kc.ler(kc.SERVICOS.token);
+const demora = Date.now() - t0;
+exigir(!!token, "token recuperado", "token não encontrado — rode: mm-login");
+exigir(demora < 1000, `leitura rápida (${demora} ms, sem caixa de senha)`,
+  `leitura demorou ${demora} ms — o macOS provavelmente pediu autorização`);
+
+if (!token) { console.log("\n  Sem token não dá para seguir.\n"); process.exit(1); }
+
+// 5 — o teste que importa: uma mensagem real, ponta a ponta
+console.log("\n  5. Mensagem real de ponta a ponta");
+const cab = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+const eu = await fetch(`${cfg.servidor}/api/v4/users/me`, { headers: cab }).then((r) => r.json());
+if (!exigir(eu?.id, `identificado como @${eu?.username}`, "não consegui identificar seu usuário")) {
+  process.exit(1);
+}
+
+// Canal de mensagem direta consigo mesmo — o Mattermost permite.
+const canal = await fetch(`${cfg.servidor}/api/v4/channels/direct`, {
+  method: "POST", headers: cab, body: JSON.stringify([eu.id, eu.id]),
+}).then((r) => r.json());
+if (!exigir(canal?.id, "canal de teste pronto", `não criei o canal: ${JSON.stringify(canal)}`)) {
+  process.exit(1);
+}
+
+const marcaLog = lerLog().length;
+const carimbo = new Date().toLocaleTimeString("pt-BR");
+const envio = await fetch(`${cfg.servidor}/api/v4/posts`, {
+  method: "POST", headers: cab,
+  body: JSON.stringify({
+    channel_id: canal.id,
+    message: `${MARCA_TESTE} Verificação do mm-notify às ${carimbo}. Se você viu o popup e ouviu o som, está tudo certo.`,
+  }),
+}).then((r) => r.json());
+
+if (!exigir(envio?.id, "mensagem enviada pelo servidor", `envio falhou: ${JSON.stringify(envio)}`)) {
+  process.exit(1);
+}
+
+info("aguardando o daemon reagir…");
+let reagiu = false;
+for (let i = 0; i < 20; i++) {
+  await espera(500);
+  if (lerLog().slice(marcaLog).includes("Alerta [dm]")) { reagiu = true; break; }
+}
+exigir(reagiu, "daemon recebeu e disparou o alerta",
+  "o daemon NÃO reagiu em 10s — a mensagem saiu mas não voltou pelo WebSocket");
+
+// -------------------------------------------------------------- conclusão
+console.log("\n  " + "─".repeat(44));
+if (problemas === 0) {
+  console.log("\n  ✓ Cadeia técnica inteira funcionando.\n");
+  console.log("  Só falta o que o computador não vê por você:");
+  console.log("  um popup deve ter surgido no canto superior direito,");
+  console.log("  com som, e um banner do macOS junto.\n");
+  console.log("  Se você viu e ouviu → está tudo certo.");
+  console.log("  Se não → me diga o que faltou (popup, som ou banner).\n");
+} else {
+  console.log(`\n  ✗ ${problemas} problema(s). Detalhes: mm-ctl logs\n`);
+  process.exit(1);
+}

@@ -1,0 +1,14 @@
+# Binário compilado — cada máquina roda mmpopup/build.sh
+mmpopup/MMPopup.app/
+
+# Logs de execução
+logs/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Pacotes gerados para distribuição
+*.zip

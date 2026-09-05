@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+// Guarda suas credenciais do Mattermost no Keychain do macOS.
+// A senha é validada contra o servidor ANTES de ser gravada, para não deixar
+// uma credencial errada guardada e o daemon falhando em silêncio depois.
+import { createInterface } from "node:readline";
+import { carregarConfig } from "../src/config.js";
+import { autenticar, ErroCredenciais } from "../src/auth.js";
+import * as kc from "../src/keychain.js";
+
+const cfg = carregarConfig();
+
+const ENTER = ["\n", "\r"];
+const CTRL_C = "\u0003";        // Ctrl-C
+const CTRL_D = "\u0004";        // Ctrl-D (fim de entrada)
+const BACKSPACE = ["\u007f", "\b"];  // apagar
+
+function perguntar(texto) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  return new Promise((resolve) => {
+    rl.question(texto, (r) => { rl.close(); resolve(r.trim()); });
+  });
+}
+
+/**
+ * Lê a senha sem ecoar.
+ *
+ * NÃO use readline aqui. Uma interface readline com `terminal: true` ecoa cada
+ * tecla no stdout por conta própria, e o setRawMode não a impede — foi
+ * exatamente assim que uma senha acabou impressa na tela.
+ */
+function perguntarSenha(texto) {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+
+    if (!stdin.isTTY) {
+      // Sem terminal não há como desligar o eco: melhor recusar do que
+      // arriscar imprimir a senha.
+      console.error("\n  ✗ mm-login precisa de um terminal interativo.");
+      process.exit(1);
+    }
+
+    process.stdout.write(texto);
+    const eraRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+
+    let senha = "";
+    const restaurar = () => {
+      stdin.setRawMode(eraRaw);
+      stdin.removeListener("data", aoDigitar);
+      stdin.pause();
+    };
+
+    const aoDigitar = (ch) => {
+      const c = ch.toString("utf8");
+
+      if (ENTER.includes(c) || c === CTRL_D) {
+        restaurar();
+        process.stdout.write("\n");
+        resolve(senha);
+      } else if (c === CTRL_C) {
+        restaurar();
+        process.stdout.write("\n");
+        process.exit(130);
+      } else if (BACKSPACE.includes(c)) {
+        senha = senha.slice(0, -1);
+      } else {
+        senha += c;
+      }
+    };
+
+    stdin.on("data", aoDigitar);
+  });
+}
+
+const principal = async () => {
+  console.log(`\n  mm-notify — login\n  Servidor: ${cfg.servidor}\n`);
+
+  const loginId = await perguntar("  E-mail ou usuário: ");
+  if (!loginId) {
+    console.error("\n  ✗ Login vazio.");
+    process.exit(1);
+  }
+
+  const senha = await perguntarSenha("  Senha (não aparece enquanto você digita): ");
+  if (!senha) {
+    console.error("  ✗ Senha vazia.");
+    process.exit(1);
+  }
+
+  process.stdout.write("\n  Validando no servidor… ");
+  let token, usuario;
+  try {
+    ({ token, usuario } = await autenticar(cfg.servidor, loginId, senha));
+  } catch (e) {
+    console.error("falhou.\n");
+    console.error(e instanceof ErroCredenciais
+      ? "  ✗ Usuário ou senha incorretos. Nada foi gravado."
+      : `  ✗ ${e.message}`);
+    process.exit(1);
+  }
+  console.log("ok!\n");
+
+  await kc.gravar(kc.SERVICOS.login, loginId);
+  await kc.gravar(kc.SERVICOS.senha, senha);
+  await kc.gravar(kc.SERVICOS.token, token);
+  await kc.gravar(kc.SERVICOS.usuarioId, usuario.id);
+
+  console.log(`  ✓ Conectado como @${usuario.username} (${usuario.email})`);
+  console.log("  ✓ Credenciais guardadas no Keychain do macOS.\n");
+  console.log("  Próximo passo:  ~/mm-notify/bin/mm-ctl instalar\n");
+};
+
+principal();

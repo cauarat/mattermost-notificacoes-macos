@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mm-notify no Outro Mac</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    --papel:      #fbfbfd;
+    --papel-2:    #f2f3f7;
+    --tinta:      #14171c;
+    --tinta-2:    #3d4552;
+    --neutro:     #667085;
+    --linha:      #dcdfe8;
+    --acento:     #1f6feb;
+    --acento-sub: #e8f0fe;
+    --ok:         #0f7355;
+    --ok-sub:     #e2f4ee;
+    --alerta:     #9a5b00;
+    --alerta-sub: #fdf1de;
+    --terminal:   #10131a;
+    --term-texto: #dfe4ee;
+    --term-fraco: #7e8798;
+    --term-verde: #7bd6a8;
+    --sombra:     0 1px 2px rgba(20,23,28,.05), 0 8px 24px -12px rgba(20,23,28,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --papel:      #101318;
+      --papel-2:    #171b22;
+      --tinta:      #e9ecf2;
+      --tinta-2:    #b3bccb;
+      --neutro:     #8b95a7;
+      --linha:      #262c36;
+      --acento:     #6ea6ff;
+      --acento-sub: #172538;
+      --ok:         #58c79d;
+      --ok-sub:     #12241e;
+      --alerta:     #d99b3d;
+      --alerta-sub: #251d10;
+      --terminal:   #080a0e;
+      --term-texto: #dfe4ee;
+      --term-fraco: #6d7688;
+      --term-verde: #7bd6a8;
+      --sombra:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --papel:      #101318;
+    --papel-2:    #171b22;
+    --tinta:      #e9ecf2;
+    --tinta-2:    #b3bccb;
+    --neutro:     #8b95a7;
+    --linha:      #262c36;
+    --acento:     #6ea6ff;
+    --acento-sub: #172538;
+    --ok:         #58c79d;
+    --ok-sub:     #12241e;
+    --alerta:     #d99b3d;
+    --alerta-sub: #251d10;
+    --terminal:   #080a0e;
+    --term-texto: #dfe4ee;
+    --term-fraco: #6d7688;
+    --term-verde: #7bd6a8;
+    --sombra:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .folha {
+    max-width: 47rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  /* ---------------------------------------------------------- cabeçalho */
+  .capa { border-bottom: 1px solid var(--linha); padding-bottom: 2rem; margin-bottom: 2.75rem; }
+
+  .sobrenome {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: .74rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--neutro);
+    margin: 0 0 .85rem;
+  }
+
+  h1 {
+    font-family: "Instrument Sans", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5.5vw, 2.85rem);
+    line-height: 1.08;
+    letter-spacing: -.022em;
+    text-wrap: balance;
+    margin: 0 0 .9rem;
+  }
+
+  .resumo { font-size: 1.1rem; color: var(--tinta-2); margin: 0; max-width: 38rem; }
+
+  .fatos {
+    display: flex; flex-wrap: wrap; gap: .5rem 1.75rem;
+    margin-top: 1.6rem;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: .78rem;
+    color: var(--neutro);
+  }
+  .fatos b { color: var(--tinta); font-weight: 700; }
+
+  /* ------------------------------------------------------------ seções */
+  h2 {
+    font-family: "Instrument Sans", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 1.35rem;
+    letter-spacing: -.012em;
+    margin: 3.25rem 0 1.1rem;
+    text-wrap: balance;
+  }
+  h2:first-of-type { margin-top: 0; }
+
+  p { margin: 0 0 1rem; }
+  a { color: var(--acento); text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--acento); outline-offset: 3px; border-radius: 3px;
+  }
+
+  /* --------------------------------------------------------- requisitos */
+  .checagem { display: flex; flex-direction: column; gap: .6rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+  .checagem li {
+    display: grid; grid-template-columns: 1.6rem 1fr; gap: .1rem .7rem;
+    padding: .85rem 1rem; border: 1px solid var(--linha); border-radius: 8px;
+    background: var(--papel-2);
+  }
+  .checagem .marca {
+    grid-row: span 2; font-family: "JetBrains Mono", monospace; font-weight: 700;
+    font-size: .95rem; color: var(--acento); line-height: 1.5;
+  }
+  .checagem .oque { font-weight: 600; }
+  .checagem .como { color: var(--neutro); font-size: .93rem; }
+  .checagem code { font-size: .87em; }
+
+  /* -------------------------------------------------------------- passos
+     A numeração aqui não é enfeite: a ordem importa de verdade — compilar
+     antes de logar, logar antes de subir o serviço. */
+  .passos { counter-reset: passo; display: flex; flex-direction: column; gap: 2.5rem; }
+
+  .passo { position: relative; padding-left: 3.4rem; counter-increment: passo; }
+  .passo::before {
+    content: counter(passo);
+    position: absolute; left: 0; top: -.15rem;
+    width: 2.3rem; height: 2.3rem;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--acento); color: #fff;
+    font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .passo h3 {
+    font-family: "Instrument Sans", system-ui, sans-serif;
+    font-weight: 600; font-size: 1.12rem; letter-spacing: -.008em;
+    margin: 0 0 .5rem; text-wrap: balance;
+  }
+  .passo p { margin-bottom: .8rem; }
+  .passo p:last-child { margin-bottom: 0; }
+
+  /* ------------------------------------------------------------ terminal */
+  .terminal {
+    background: var(--terminal);
+    border-radius: 9px;
+    padding: .95rem 1.1rem;
+    margin: 0 0 .9rem;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: .87rem;
+    line-height: 1.72;
+    color: var(--term-texto);
+    box-shadow: var(--sombra);
+  }
+  .terminal pre { margin: 0; }
+  /* O $ vem por CSS para não ser copiado junto com o comando. */
+  .cmd { display: block; white-space: pre; }
+  .cmd::before { content: "$ "; color: var(--term-fraco); }
+  .saida { display: block; white-space: pre; color: var(--term-fraco); }
+  .saida.bom { color: var(--term-verde); }
+
+  .esperado {
+    border-left: 2px solid var(--ok);
+    background: var(--ok-sub);
+    padding: .7rem .95rem;
+    border-radius: 0 6px 6px 0;
+    font-size: .94rem;
+    color: var(--tinta-2);
+    margin: 0 0 .9rem;
+  }
+  .esperado b { color: var(--ok); font-weight: 600; }
+
+  .cuidado {
+    border-left: 2px solid var(--alerta);
+    background: var(--alerta-sub);
+    padding: .8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    font-size: .95rem;
+    color: var(--tinta-2);
+    margin: 1.25rem 0;
+  }
+  .cuidado b { color: var(--alerta); font-weight: 600; }
+
+  /* -------------------------------------------------------------- tabela */
+  .rolagem { overflow-x: auto; margin: 0 0 1rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 30rem; }
+  th, td { text-align: left; padding: .68rem .9rem; border-bottom: 1px solid var(--linha); vertical-align: top; }
+  th {
+    font-family: "Instrument Sans", sans-serif; font-weight: 600; font-size: .8rem;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--neutro);
+    border-bottom-width: 1.5px;
+  }
+  td:first-child { white-space: nowrap; }
+
+  code {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: .875em;
+    background: var(--papel-2);
+    border: 1px solid var(--linha);
+    border-radius: 4px;
+    padding: .08em .38em;
+  }
+
+  .fim {
+    margin-top: 3.5rem; padding-top: 1.75rem;
+    border-top: 1px solid var(--linha);
+    color: var(--neutro); font-size: .93rem;
+  }
+
+  @media (max-width: 34rem) {
+    body { font-size: 16px; }
+    .folha { padding: 2.5rem 1.15rem 4rem; }
+    .passo { padding-left: 2.9rem; }
+    .passo::before { width: 2rem; height: 2rem; font-size: .85rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="folha">
+
+  <header class="capa">
+    <p class="sobrenome">Instalação · macOS</p>
+    <h1>mm-notify no Outro Mac</h1>
+    <p class="resumo">
+      Deixar o segundo Mac avisando das mensagens do Mattermost exatamente como
+      o primeiro: popup por cima de tudo, som e banner do sistema.
+    </p>
+    <div class="fatos">
+      <span><b>~10 min</b> no total</span>
+      <span><b>1</b> comando faz quase tudo</span>
+      <span>servidor <b>team.actuar.group</b></span>
+    </div>
+  </header>
+
+  <h2>Antes de começar</h2>
+  <p>Três coisas precisam existir no Mac de destino. Abra o Terminal lá e confira:</p>
+
+  <ul class="checagem">
+    <li>
+      <span class="marca">01</span>
+      <span class="oque">Node.js 22 ou maior</span>
+      <span class="como">Rode <code>node -v</code>. Se não aparecer nada, ou aparecer versão menor que 22, baixe em <a href="https://nodejs.org">nodejs.org</a> (opção LTS).</span>
+    </li>
+    <li>
+      <span class="marca">02</span>
+      <span class="oque">Ferramentas de linha de comando da Apple</span>
+      <span class="como">Rode <code>swiftc --version</code>. Se der erro, rode <code>xcode-select --install</code> e conclua a janela que abrir.</span>
+    </li>
+    <li>
+      <span class="marca">03</span>
+      <span class="oque">O arquivo mm-notify-completo.zip</span>
+      <span class="como">Passe para o outro Mac por AirDrop, Drive ou pendrive. Está anexado na nossa conversa.</span>
+    </li>
+  </ul>
+
+  <h2>Passo a passo</h2>
+
+  <div class="passos">
+
+    <section class="passo">
+      <h3>Descompacte na sua pasta pessoal</h3>
+      <p>
+        Dê dois cliques no <code>.zip</code>. Ele cria uma pasta chamada
+        <code>mm-notify</code>. Arraste essa pasta para a sua pasta de usuário —
+        a que tem o ícone de casinha e o seu nome.
+      </p>
+      <div class="esperado">
+        O caminho final deve ser <b>~/mm-notify</b>, com <code>instalar.sh</code> dentro.
+      </div>
+    </section>
+
+    <section class="passo">
+      <h3>Rode o instalador</h3>
+      <p>Abra o Terminal e cole esta linha:</p>
+      <div class="terminal"><pre><span class="cmd">bash ~/mm-notify/instalar.sh</span></pre></div>
+      <p>
+        Ele confere os requisitos, compila o app de popup, cria os atalhos de
+        comando e ajusta o serviço para os caminhos desta máquina.
+      </p>
+    </section>
+
+    <section class="passo">
+      <h3>Digite seu login do Mattermost</h3>
+      <p>
+        No meio da instalação ele pede e-mail e senha. A senha
+        <strong>não aparece na tela</strong> enquanto você digita — isso é
+        proposital, pode digitar e apertar Enter.
+      </p>
+      <div class="terminal"><pre><span class="saida">  E-mail ou usuário: caua@actuar.com</span><span class="saida">  Senha (não aparece enquanto você digita):</span><span class="saida"> </span><span class="saida">  Validando no servidor… ok!</span><span class="saida bom">  ✓ Conectado como @caua</span><span class="saida bom">  ✓ Credenciais guardadas no Keychain do macOS.</span></pre></div>
+      <p>A senha vai para o Keychain do macOS, nunca para um arquivo de texto.</p>
+    </section>
+
+    <section class="passo">
+      <h3>Espere a verificação automática</h3>
+      <p>
+        No fim, o instalador manda uma mensagem de teste de verdade pelo
+        servidor e confere se ela volta e dispara o alerta.
+      </p>
+      <div class="terminal"><pre><span class="saida bom">  ✓ processo rodando</span><span class="saida bom">  ✓ conexão ativa agora</span><span class="saida bom">  ✓ MMPopup rodando</span><span class="saida bom">  ✓ leitura rápida (23 ms, sem caixa de senha)</span><span class="saida bom">  ✓ mensagem enviada pelo servidor</span><span class="saida bom">  ✓ daemon recebeu e disparou o alerta</span><span class="saida"> </span><span class="saida bom">  ✓ Cadeia técnica inteira funcionando.</span></pre></div>
+      <div class="esperado">
+        Neste momento um <b>popup deve aparecer</b> no canto superior direito,
+        com som. Se você viu e ouviu, acabou — está funcionando.
+      </div>
+    </section>
+
+    <section class="passo">
+      <h3>Permita a notificação, se o Mac perguntar</h3>
+      <p>
+        Pode surgir uma caixa do macOS pedindo permissão para enviar
+        notificações. Clique em <strong>Permitir</strong>. Isso libera o banner
+        do sistema — o popup e o som funcionam de qualquer forma.
+      </p>
+    </section>
+
+  </div>
+
+  <div class="cuidado">
+    <b>Não instale a extensão do Chrome neste mesmo Mac.</b>
+    Se as duas rodarem juntas, cada mensagem alerta duas vezes. A extensão é
+    para máquinas Windows e Linux, onde o daemon não roda.
+  </div>
+
+  <h2>Pronto. E daí em diante?</h2>
+  <p>
+    O serviço sobe sozinho toda vez que você liga o Mac. Não há nada para abrir
+    nem manter aberto. Estes comandos ficam disponíveis no Terminal:
+  </p>
+
+  <div class="rolagem">
+    <table>
+      <thead>
+        <tr><th>Comando</th><th>Para quê</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>mm-verificar</code></td><td>Está tudo funcionando? Manda uma mensagem real e confere a cadeia inteira.</td></tr>
+        <tr><td><code>mm-ctl status</code></td><td>Estado rápido: daemon, popup e conexão.</td></tr>
+        <tr><td><code>mm-ctl logs</code></td><td>Acompanhar ao vivo o que está acontecendo.</td></tr>
+        <tr><td><code>mm-ctl restart</code></td><td>Aplicar mudanças feitas no <code>config.json</code>.</td></tr>
+        <tr><td><code>mm-test --todos</code></td><td>Testar só o visual e o som, sem envolver o servidor.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Escolher canais e sons</h2>
+  <p>
+    Mensagens diretas e menções a você já alertam sempre. Para incluir canais
+    específicos, edite <code>~/mm-notify/config.json</code> no campo
+    <code>canaisMonitorados</code> e depois rode <code>mm-ctl restart</code>.
+  </p>
+  <p>
+    Os sons por tipo são <code>Hero</code> para mensagem direta,
+    <code>Glass</code> para menção e <code>Tink</code> para canal. Qualquer som
+    do macOS serve: Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping,
+    Pop, Purr, Sosumi, Submarine e Tink.
+  </p>
+
+  <h2>Se algo der errado</h2>
+  <div class="rolagem">
+    <table>
+      <thead>
+        <tr><th>O que aparece</th><th>O que fazer</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Erro de SDK ao compilar</td>
+          <td>As ferramentas da Apple estão quebradas nessa máquina. Rode <code>bash ~/mm-notify/bin/consertar-clt.sh --sim</code> e depois o instalador de novo.</td>
+        </tr>
+        <tr>
+          <td><code>command not found: mm-ctl</code></td>
+          <td>Feche e reabra o Terminal. Se persistir, use o caminho inteiro: <code>~/mm-notify/bin/mm-ctl</code>.</td>
+        </tr>
+        <tr>
+          <td><code>Bootstrap failed</code></td>
+          <td>O serviço já estava carregado. Rode <code>mm-ctl restart</code>.</td>
+        </tr>
+        <tr>
+          <td>Popup aparece, mas sem som</td>
+          <td>Confira o volume do Mac e o campo <code>som.ativado</code> no <code>config.json</code>.</td>
+        </tr>
+        <tr>
+          <td>Nada acontece</td>
+          <td>Rode <code>mm-ctl logs</code>. Deve aparecer <em>Conectado e autenticado no Mattermost</em>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="fim">
+    O popup é uma janela, não uma notificação do sistema — por isso ele aparece
+    mesmo com o Foco ligado e por cima de apps em tela cheia. É essa a diferença
+    em relação ao app oficial do Mattermost, que nesta máquina nunca chegou a se
+    registrar no Centro de Notificações do macOS.
+  </p>
+
+</div>
+</body>
+</html>
