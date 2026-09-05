@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Guarda suas credenciais do Mattermost no Keychain do macOS.
+// Guarda suas credenciais do Mattermost no cofre do sistema (Keychain no macOS,
+// DPAPI no Windows, libsecret no Linux).
 // A senha é validada contra o servidor ANTES de ser gravada, para não deixar
 // uma credencial errada guardada e o daemon falhando em silêncio depois.
 import { createInterface } from "node:readline";
 import { carregarConfig } from "../src/config.js";
 import { autenticar, ErroCredenciais } from "../src/auth.js";
-import * as kc from "../src/keychain.js";
+import * as kc from "../src/segredos.js";
 
 const cfg = carregarConfig();
 
@@ -107,7 +108,7 @@ const principal = async () => {
   await kc.gravar(kc.SERVICOS.usuarioId, usuario.id);
 
   console.log(`  ✓ Conectado como @${usuario.username} (${usuario.email})`);
-  console.log("  ✓ Credenciais guardadas no Keychain do macOS.\n");
+  console.log(`  ✓ Credenciais guardadas no ${kc.NOME_COFRE}.\n`);
   console.log("  Próximo passo:  ~/mm-notify/bin/mm-ctl instalar\n");
 };
 

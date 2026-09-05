@@ -1,7 +1,7 @@
 // Login no Mattermost e manutenção da sessão.
 // A sessão do servidor expira (~30 dias); qualquer 401 dispara novo login
 // automático a partir das credenciais do Keychain, sem intervenção do usuário.
-import * as kc from "./keychain.js";
+import * as kc from "./segredos.js";
 import { log, aviso } from "./log.js";
 
 export class ErroCredenciais extends Error {}

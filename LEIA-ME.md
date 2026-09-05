@@ -1,6 +1,8 @@
 # mm-notify
 
-Notificações em tempo real do Mattermost para macOS: **popup sobreposto + banner nativo + som**.
+Notificações em tempo real do Mattermost: **popup sobreposto + banner + som**.
+
+Roda em **macOS, Windows e Linux** — com popup acima dos outros aplicativos nos três.
 
 Conecta direto na API do Mattermost (`team.actuar.group`) por WebSocket, independente do app desktop.
 
@@ -148,6 +150,28 @@ src/config.js      carrega config.json com padrões
 mmpopup/main.swift popup (NSPanel) + som
 testes/            testes do filtro
 ```
+
+## Instalação por sistema
+
+| Sistema | Comando | Popup | Serviço |
+|---|---|---|---|
+| macOS | `bash instalar.sh` | `MMPopup.app` (Swift, `NSPanel`) | launchd |
+| Windows | `powershell -ExecutionPolicy Bypass -File .\instalar-windows.ps1` | WinForms `TopMost` | pasta Inicializar |
+| Linux | `bash instalar-linux.sh` | tkinter `-topmost` | systemd de usuário |
+
+O daemon Node é o mesmo nos três: WebSocket, filtro e autenticação não mudam.
+O que varia está isolado em `src/plataforma.js` — como desenhar na tela, tocar
+som, guardar segredo e subir sozinho.
+
+**Onde ficam as credenciais:** Keychain (macOS), DPAPI (Windows), libsecret ou
+arquivo 0600 (Linux). Nunca em texto claro legível por outros.
+
+**Ressalva do Linux:** `-topmost` é um pedido ao gerenciador de janelas, não
+uma garantia. No X11 funciona de forma consistente; no Wayland varia conforme
+o compositor.
+
+**Ressalva do Windows:** a janela fica acima de tudo, exceto jogos em tela
+cheia exclusiva — nenhuma janela aparece por cima desses, em sistema nenhum.
 
 ## Extensão do Chrome (outras máquinas)
 

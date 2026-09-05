@@ -24,7 +24,17 @@ LOG="$RAIZ/logs/mm-notify.log"
 ERR="$RAIZ/logs/mm-notify.err"
 UID_ATUAL="$(id -u)"
 
-carregado() { launchctl print "gui/$UID_ATUAL/$ROTULO" >/dev/null 2>&1; }
+# O Linux usa systemd de usuario; o macOS, launchd. As funcoes abaixo
+# escondem essa diferenca do resto do script.
+SISTEMA="$(uname -s)"
+
+carregado() {
+  if [ "$SISTEMA" = "Darwin" ]; then
+    launchctl print "gui/$UID_ATUAL/$ROTULO" >/dev/null 2>&1
+  else
+    systemctl --user is-active --quiet mm-notify.service
+  fi
+}
 
 case "${1:-status}" in
   instalar)
@@ -58,6 +68,9 @@ case "${1:-status}" in
     ;;
 
   start)
+    if [ "$SISTEMA" != "Darwin" ]; then
+      systemctl --user start mm-notify.service && echo "✓ Iniciado."; exit $?
+    fi
     if [ ! -f "$PLIST_DESTINO" ]; then
       echo "LaunchAgent não instalado. Rode primeiro:"; echo "  $EU instalar"; exit 1
     fi
@@ -65,34 +78,51 @@ case "${1:-status}" in
     ;;
 
   stop)
+    if [ "$SISTEMA" != "Darwin" ]; then
+      systemctl --user stop mm-notify.service && echo "✓ Parado."; exit $?
+    fi
     launchctl kill SIGTERM "gui/$UID_ATUAL/$ROTULO" 2>/dev/null \
       && echo "✓ Parado (o launchd vai relançar; use 'desinstalar' para desligar de vez)." \
       || echo "Não estava rodando."
     ;;
 
   restart)
+    if [ "$SISTEMA" != "Darwin" ]; then
+      systemctl --user restart mm-notify.service && echo "✓ Reiniciado."; exit $?
+    fi
     launchctl kickstart -k "gui/$UID_ATUAL/$ROTULO" && echo "✓ Reiniciado."
     ;;
 
   status)
     echo "mm-notify"
     echo "  raiz:        $RAIZ"
-    if [ -f "$PLIST_DESTINO" ]; then echo "  LaunchAgent: instalado"; else echo "  LaunchAgent: NÃO instalado (rode: $EU instalar)"; fi
+    if [ "$SISTEMA" = "Darwin" ]; then
+      if [ -f "$PLIST_DESTINO" ]; then echo "  LaunchAgent: instalado"; else echo "  LaunchAgent: NÃO instalado (rode: $EU instalar)"; fi
+    else
+      systemctl --user is-enabled --quiet mm-notify.service 2>/dev/null \
+        && echo "  serviço systemd: habilitado" || echo "  serviço systemd: NÃO habilitado (rode: bash instalar-linux.sh)"
+    fi
     if carregado; then
       pid="$(launchctl print "gui/$UID_ATUAL/$ROTULO" 2>/dev/null | awk '/^\tpid = /{print $3}')"
       echo "  daemon:      rodando${pid:+ (pid $pid)}"
     else
       echo "  daemon:      parado"
     fi
-    if pgrep -f "MMPopup.app/Contents/MacOS/MMPopup" >/dev/null 2>&1; then
+    if [ "$SISTEMA" = "Darwin" ]; then MARCA="MMPopup.app/Contents/MacOS/MMPopup"; else MARCA="popup-linux.py"; fi
+    if pgrep -f "$MARCA" >/dev/null 2>&1; then
       echo "  popup:       rodando"
     else
       echo "  popup:       parado"
     fi
-    if [ -f "$RAIZ/mmpopup/MMPopup.app/Contents/MacOS/MMPopup" ]; then
-      echo "  MMPopup.app: compilado"
+    if [ "$SISTEMA" = "Darwin" ]; then
+      if [ -f "$RAIZ/mmpopup/MMPopup.app/Contents/MacOS/MMPopup" ]; then
+        echo "  MMPopup.app: compilado"
+      else
+        echo "  MMPopup.app: NÃO compilado (rode: bash mmpopup/build.sh)"
+      fi
     else
-      echo "  MMPopup.app: NÃO compilado (rode: bash mmpopup/build.sh)"
+      python3 -c "import tkinter" 2>/dev/null \
+        && echo "  popup Python: pronto" || echo "  popup Python: tkinter AUSENTE (apt install python3-tk)"
     fi
     echo ""
     echo "  últimas linhas do log:"
