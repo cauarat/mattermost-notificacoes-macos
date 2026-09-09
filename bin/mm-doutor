@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+// Diagnóstico do mm-notify: investiga sintomas e diz o comando que resolve.
+//
+// Diferença para o mm-verificar: aquele TESTA a cadeia enviando uma mensagem
+// de verdade pelo servidor. Este INVESTIGA o que já está errado, sem mandar
+// nada — serve para quando algo parou de funcionar.
+//
+// Cada verificação aqui nasceu de uma falha real, não de hipótese.
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { carregarConfig, RAIZ } from "../src/config.js";
+import { SISTEMA } from "../src/plataforma.js";
+import * as diag from "../src/diagnostico.js";
+import * as cofre from "../src/segredos.js";
+
+const executar = promisify(execFile);
+const cfg = carregarConfig();
+const LOG = join(RAIZ, "logs", "mm-notify.log");
+
+const achados = [];
+const ok = (m) => console.log(`  ✓ ${m}`);
+const nota = (m) => console.log(`    ${m}`);
+
+/** Registra um problema junto com o comando exato que o resolve. */
+function problema(titulo, explicacao, comando) {
+  achados.push({ titulo, explicacao, comando });
+  console.log(`  ✗ ${titulo}`);
+}
+
+const lerLog = () => {
+  try { return readFileSync(LOG, "utf8"); } catch { return ""; }
+};
+
+/** Carimbo de data das linhas do log: "[04/09/2026, 08:06:20] ..." */
+function horaDaLinha(linha) {
+  const m = linha.match(/^\[(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{2}):(\d{2}):(\d{2})\]/);
+  if (!m) return null;
+  const [, d, mes, ano, h, min, s] = m;
+  return new Date(+ano, +mes - 1, +d, +h, +min, +s);
+}
+
+console.log("\n  mm-doutor — diagnóstico do mm-notify");
+console.log("  " + "─".repeat(44));
+console.log(`  sistema: ${SISTEMA}   pasta: ${RAIZ}\n`);
+
+const procs = await diag.listaProcessos();
+const log = lerLog();
+const linhas = log.trimEnd().split("\n").filter(Boolean);
+
+// ------------------------------------------------------------------ 1. daemon
+console.log("  1. Daemon");
+const estadoDaemon = await diag.daemonAtivo(procs);
+const daemonRodando = estadoDaemon.rodando;
+
+if (daemonRodando) {
+  ok(`processo rodando${estadoDaemon.pid ? ` (pid ${estadoDaemon.pid})` : ""}`);
+} else {
+  problema(
+    "daemon parado",
+    "Sem ele nada escuta o Mattermost — você não recebe alerta nenhum.",
+    SISTEMA === "windows"
+      ? "Abra a pasta Inicializar e execute mm-notify.vbs"
+      : "mm-ctl restart",
+  );
+}
+
+// -------------------------------------------------------------- 2. instalação
+console.log("\n  2. Instalação do serviço");
+if (SISTEMA === "macos") {
+  const plist = join(process.env.HOME, "Library", "LaunchAgents", "com.cauatoledo.mmnotify.plist");
+  existsSync(plist)
+    ? ok("LaunchAgent instalado (sobe sozinho no login)")
+    : problema("serviço não instalado",
+        "O daemon não voltará sozinho depois que você reiniciar o computador.",
+        "mm-ctl instalar");
+} else if (SISTEMA === "linux") {
+  try {
+    await executar("systemctl", ["--user", "is-enabled", "--quiet", "mm-notify.service"]);
+    ok("serviço systemd habilitado");
+  } catch {
+    problema("serviço não habilitado",
+      "O daemon não voltará sozinho depois que você reiniciar o computador.",
+      "bash instalar-linux.sh");
+  }
+} else {
+  const vbs = join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu",
+                   "Programs", "Startup", "mm-notify.vbs");
+  existsSync(vbs)
+    ? ok("inicialização automática configurada")
+    : nota("não confirmei a inicialização automática (verifique a pasta Inicializar)");
+}
+
+// ------------------------------------------------------------------ 3. conexão
+console.log("\n  3. Conexão com o Mattermost");
+if (!linhas.length) {
+  problema("log vazio",
+    "O daemon nunca chegou a escrever nada — provavelmente nunca subiu.",
+    "mm-ctl restart");
+} else {
+  const iConectado = log.lastIndexOf("Conectado e autenticado");
+  const iQueda = Math.max(log.lastIndexOf("Conexão perdida"),
+                          log.lastIndexOf("inalcançável"),
+                          log.lastIndexOf("recusou a autenticação"));
+
+  if (iConectado === -1) {
+    problema("nunca autenticou no servidor",
+      "O daemon subiu mas não conseguiu entrar no Mattermost.",
+      "mm-login");
+  } else if (iConectado > iQueda) {
+    ok("última ação registrada foi uma conexão bem-sucedida");
+  } else {
+    nota("a última ação no log foi uma queda — veja o item seguinte");
+  }
+
+  // Falha nº 1 desta semana: socket preso em CONNECTING, 28 min mudo.
+  const ultima = linhas[linhas.length - 1];
+  if (ultima.includes("Conectando em")) {
+    const quando = horaDaLinha(ultima);
+    const minutos = quando ? Math.round((Date.now() - quando.getTime()) / 60000) : null;
+    if (minutos === null || minutos >= 1) {
+      problema(
+        `tentativa de conexão sem resposta${minutos !== null ? ` há ${minutos} min` : ""}`,
+        "A última linha do log é 'Conectando em…' e nada veio depois. " +
+        "Foi exatamente assim que 2 mensagens se perderam em 04/09. " +
+        "O código já tem prazo de 20s e vigia de 5min para isso — se persistir, é caso novo.",
+        "mm-ctl restart",
+      );
+    } else {
+      ok("conectando agora (aguarde alguns segundos e rode de novo)");
+    }
+  }
+
+  // Credencial inválida repetida
+  const recusas = (log.match(/recusou a autenticação/g) ?? []).length;
+  if (recusas >= 3 && iQueda > iConectado) {
+    problema(`servidor recusou a autenticação ${recusas}x`,
+      "Normalmente significa que a senha do Mattermost mudou.",
+      "mm-login");
+  }
+}
+
+// ------------------------------------------------------------------- 4. popup
+console.log("\n  4. Programa de popup");
+
+if (await diag.popupAtivo(procs)) {
+  ok(`rodando (${SISTEMA})`);
+} else if (daemonRodando) {
+  nota("parado — normal: ele sobe no primeiro alerta");
+} else {
+  nota("parado (o daemon também está)");
+}
+
+if (SISTEMA === "macos") {
+  const bin = join(RAIZ, "mmpopup", "MMPopup.app", "Contents", "MacOS", "MMPopup");
+  existsSync(bin)
+    ? ok("MMPopup.app compilado")
+    : problema("MMPopup.app não compilado",
+        "Sem ele não há popup na tela — só o banner e o som.",
+        "bash mmpopup/build.sh");
+} else if (SISTEMA === "linux") {
+  try {
+    await executar("python3", ["-c", "import tkinter"]);
+    ok("python3 com tkinter disponível");
+  } catch {
+    problema("tkinter ausente",
+      "É o que desenha o popup no Linux.",
+      "sudo apt install python3-tk   (ou dnf install python3-tkinter)");
+  }
+}
+
+// ------------------------------------------------------------------- 5. cofre
+console.log(`\n  5. Cofre de credenciais (${cofre.NOME_COFRE})`);
+const t0 = Date.now();
+const token = await cofre.ler(cofre.SERVICOS.token);
+const demora = Date.now() - t0;
+
+if (!token) {
+  problema("nenhuma credencial guardada",
+    "O daemon não tem como entrar no Mattermost.",
+    "mm-login");
+} else {
+  ok("token encontrado");
+  if (demora > 1000) {
+    // Falha nº 2 desta semana: ACL autorizava o binário errado.
+    problema(`leitura demorou ${demora} ms`,
+      "Demora assim significa que o sistema abriu uma caixa pedindo sua senha. " +
+      "Regravar as credenciais corrige a permissão.",
+      "mm-login");
+  } else {
+    ok(`leitura rápida (${demora} ms, sem pedir senha)`);
+  }
+}
+
+// --------------------------------------------------------------- 6. config
+console.log("\n  6. Configuração");
+ok(`servidor: ${cfg.servidor}`);
+ok(`canais monitorados: ${cfg.canaisMonitorados.length || "nenhum"}`);
+ok(`som: ${cfg.som.ativado ? "ligado" : "DESLIGADO"}`);
+if (!cfg.som.ativado) {
+  nota("som desligado no config.json — os popups aparecem mudos");
+}
+
+// ----------------------------------------------------------------- conclusão
+console.log("\n  " + "─".repeat(44));
+
+if (achados.length === 0) {
+  console.log("\n  ✓ Nenhum problema encontrado.\n");
+  console.log("  Isto verifica o estado. Para testar de ponta a ponta com uma");
+  console.log("  mensagem real passando pelo servidor:\n");
+  console.log("      mm-verificar\n");
+  process.exit(0);
+}
+
+console.log(`\n  ${achados.length} problema(s) encontrado(s):\n`);
+achados.forEach((a, i) => {
+  console.log(`  ${i + 1}. ${a.titulo}`);
+  console.log(`     ${a.explicacao}`);
+  console.log(`     → ${a.comando}\n`);
+});
+console.log("  Depois de corrigir, rode mm-doutor de novo.\n");
+process.exit(1);

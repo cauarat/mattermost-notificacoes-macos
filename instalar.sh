@@ -74,7 +74,7 @@ rm -f /tmp/mm-build-$$.log
 # ------------------------------------------------------------------- atalhos
 passo "Criando atalhos de linha de comando"
 mkdir -p "$HOME/.local/bin"
-for c in mm-ctl mm-login mm-test mm-verificar; do
+for c in mm-ctl mm-login mm-test mm-verificar mm-doutor; do
   ln -sf "$RAIZ/bin/$c" "$HOME/.local/bin/$c"
 done
 echo "  ✓ mm-ctl, mm-login, mm-test, mm-verificar em ~/.local/bin"

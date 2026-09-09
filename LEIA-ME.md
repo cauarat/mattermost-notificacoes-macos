@@ -6,6 +6,9 @@ Roda em **macOS, Windows e Linux** — com popup acima dos outros aplicativos no
 
 Conecta direto na API do Mattermost (`team.actuar.group`) por WebSocket, independente do app desktop.
 
+> **Algo parou de funcionar?** Rode `mm-doutor` — ele diz o que está errado e o
+> comando que resolve. Guia completo em **[MANUTENCAO.md](MANUTENCAO.md)**.
+
 ---
 
 ## Por que isto existe
@@ -199,10 +202,7 @@ mm-verificar                              # cadeia ponta a ponta, com o servidor
 
 ## Problemas comuns
 
-| Sintoma | Causa provável |
-|---|---|
-| `mm-ctl status` diz "MMPopup.app: NÃO compilado" | Rode `bash mmpopup/build.sh` |
-| Log repete "recusou a autenticação" | Senha mudou. Rode `mm-login` de novo |
-| Popup aparece mas sem som | Confira `som.ativado` e o nome do som no `config.json` |
-| Banner nativo não aparece | Ajustes do Sistema → Notificações → verifique se o Script Editor pode notificar. O popup e o som independem disso |
-| Nada acontece | `mm-ctl logs` — deve mostrar "Conectado e autenticado no Mattermost" |
+Rode `mm-doutor`: ele investiga e diz a correção.
+
+Para o guia completo — como ler o log, tarefas do dia a dia, e todos os
+problemas já enfrentados com suas causas — veja **[MANUTENCAO.md](MANUTENCAO.md)**.

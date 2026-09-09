@@ -13,6 +13,7 @@ import { carregarConfig, RAIZ } from "../src/config.js";
 import { MARCA_TESTE } from "../src/filter.js";
 import * as kc from "../src/segredos.js";
 import { SISTEMA } from "../src/plataforma.js";
+import * as diag from "../src/diagnostico.js";
 
 const executar = promisify(execFile);
 const cfg = carregarConfig();
@@ -33,28 +34,13 @@ const lerLog = () => { try { return readFileSync(LOG, "utf8"); } catch { return 
 
 console.log("\n  Verificação do mm-notify\n  " + "─".repeat(44) + "\n");
 
-/** Lista de processos, do jeito que cada sistema oferece. */
-async function processos() {
-  try {
-    if (SISTEMA === "windows") {
-      const { stdout } = await executar("powershell.exe", [
-        "-NoProfile", "-Command",
-        "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
-      ]);
-      return stdout;
-    }
-    const { stdout } = await executar("/bin/ps", ["-Ao", "command"]);
-    return stdout;
-  } catch { return ""; }
-}
-
-const listaProcessos = await processos();
+const linhas = await diag.listaProcessos();
 
 // 1 — o daemon está de pé?
 console.log("  1. Daemon");
-const rodando = listaProcessos.includes("index.js") &&
-  (listaProcessos.includes("mm-notify") || SISTEMA === "windows");
-exigir(rodando, "processo rodando", "processo NÃO está rodando — rode: mm-ctl restart");
+const estadoDaemon = await diag.daemonAtivo(linhas);
+const rodando = estadoDaemon.rodando;
+exigir(rodando, `processo rodando${estadoDaemon.pid ? ` (pid ${estadoDaemon.pid})` : ""}`, "processo NÃO está rodando — rode: mm-ctl restart");
 
 // 2 — conectou no Mattermost?
 console.log("\n  2. Conexão com o Mattermost");
@@ -66,12 +52,7 @@ exigir(ultimaConexao > ultimaQueda, "conexão ativa agora", "a última coisa no 
 
 // 3 — o app de popup está compilado e vivo?
 console.log("\n  3. Popup");
-const marcaPopup = {
-  macos: "MMPopup.app/Contents/MacOS/MMPopup",
-  windows: "popup-windows.ps1",
-  linux: "popup-linux.py",
-}[SISTEMA];
-const popupVivo = listaProcessos.includes(marcaPopup);
+const popupVivo = await diag.popupAtivo(linhas);
 exigir(popupVivo, `programa de popup rodando (${SISTEMA})`,
   "programa de popup não está rodando (sobe no primeiro alerta)");
 

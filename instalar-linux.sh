@@ -34,7 +34,7 @@ echo "  ✓ pronto"
 
 passo "Criando atalhos"
 mkdir -p "$HOME/.local/bin"
-for c in mm-ctl mm-login mm-test mm-verificar; do ln -sf "$RAIZ/bin/$c" "$HOME/.local/bin/$c"; done
+for c in mm-ctl mm-login mm-test mm-verificar mm-doutor; do ln -sf "$RAIZ/bin/$c" "$HOME/.local/bin/$c"; done
 echo "  ✓ mm-ctl, mm-login, mm-test, mm-verificar"
 echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin" \
   || echo "  ⚠ adicione ao ~/.bashrc:  export PATH=\"\$HOME/.local/bin:\$PATH\""
