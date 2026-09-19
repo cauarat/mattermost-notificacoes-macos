@@ -17,5 +17,9 @@
       "intervaloSegundos": 4,
       "maximo": 3
     }
+  },
+  "_interno": {
+    "versaoInstalada": "1.0.0",
+    "ultimaVerificacao": null
   }
 }

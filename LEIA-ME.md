@@ -21,23 +21,47 @@ O `mm-notify` resolve isso por fora, e de quebra dá controle que o app não ofe
 
 ## Instalação
 
+Baixe o `MM-Notify-vX.Y.Z.zip` da página de [Releases](https://github.com/cauarat/mattermost-notificacoes-macos/releases/latest) e descompacte. Você verá um `MM-Notify.app` junto com o resto do projeto.
+
 ```bash
-# 1. Compilar o app de popup
-bash ~/mm-notify/mmpopup/build.sh
+# 1. Mover o .app para a pasta de Aplicações do seu usuário
+mkdir -p ~/Applications
+mv MM-Notify.app ~/Applications/
 
-# 2. Testar popup e som, sem precisar de servidor
-~/mm-notify/bin/mm-test --todos
-
-# 3. Guardar suas credenciais no Keychain
-~/mm-notify/bin/mm-login
-
-# 4. Instalar como serviço (sobe sozinho a cada login)
-~/mm-notify/bin/mm-ctl instalar
+# 2. Duplo-clique no .app (ou abra do Finder).
+#    Primeira vez: clique com botão direito → Abrir (Gatekeeper em apps
+#    ad-hoc-signed). O Terminal vai abrir pedindo suas credenciais do Mattermost.
 ```
 
-> Se o passo 1 falhar com erro de SDK, o Command Line Tools desta máquina está
-> quebrado. Rode `bin/consertar-clt.sh` (pede sudo) e depois
-> `bin/verificar-compilador.sh`.
+Após isso, o daemon sobe sozinho a cada login. Um ícone discreto no menu-bar dá acesso a "Verificar atualizações…" e a um botão "Sair".
+
+> Se preferir a linha de comando, o caminho antigo continua funcionando:
+>
+> ```bash
+> cd ~/mm-notify
+> bash instalar.sh          # primeira vez
+> mm-ctl atualizar          # para atualizar
+> ```
+>
+> O instalador detecta automaticamente se é primeira instalação (pede login)
+> ou atualização (pula o login, recompila o popup, reinstala o serviço).
+
+## Atualizações
+
+O `MM-Notify.app` no menu-bar verifica uma vez por hora se há release nova no GitHub. Quando encontra, exibe "Atualização disponível" e um botão "Atualizar agora" que baixa o zip, valida o SHA256, e re-roda o instalador em modo `--atualizar` (que pula o login e mantém seu `config.json` e seus `logs/` intactos).
+
+Para forçar a checagem manualmente:
+
+```bash
+mm-ctl checar-atualizacao    # só consulta
+mm-ctl atualizar             # consulta + baixa + instala
+```
+
+Se você moveu o projeto para outro lugar (ex: de `~/mm-notify` para `~/Code/mm-notify`):
+
+```bash
+mm-ctl reinstalar    # re-aponta o LaunchAgent para o caminho atual
+```
 
 ---
 

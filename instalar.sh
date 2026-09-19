@@ -4,72 +4,106 @@
 # Faz tudo: confere pré-requisitos, compila o popup, cria os atalhos, pede o
 # login e sobe o serviço. Para Windows/Linux, use a extensão do Chrome em
 # extensao-chrome/ — o popup sobreposto é específico do macOS.
+#
+# Modos:
+#   (default)        primeira instalação — confere tudo, pede login.
+#   --atualizar      re-instala por cima de uma instalação existente — pula a
+#                    checagem de pré-requisitos, pula o login (credenciais já
+#                    estão no Keychain). Mantém config.json e logs/ intactos.
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 falhou=0
 passo() { echo ""; echo "==> $1"; }
 
+# Códigos de saída (documentados ao final do script):
+#   0 = sucesso
+#   1 = pré-requisito faltando
+#   2 = credenciais ausentes (apenas em --atualizar)
+#   3 = falha na compilação do Swift
+#   4 = falha na instalação do LaunchAgent
+#   5 = falha na verificação ponta a ponta
+
+MODO_ATUALIZAR=0
+case "${1:-}" in
+  --atualizar) MODO_ATUALIZAR=1; shift ;;
+  --help|-h)
+    sed -n '2,16p' "$0"
+    exit 0
+    ;;
+esac
+
 echo ""
-echo "  mm-notify — instalação"
-echo "  ────────────────────────────────────"
+if [ "$MODO_ATUALIZAR" = 1 ]; then
+  echo "  mm-notify — atualização"
+  echo "  ────────────────────────────────────"
+else
+  echo "  mm-notify — instalação"
+  echo "  ────────────────────────────────────"
+fi
 
 # ---------------------------------------------------------------- requisitos
-passo "Conferindo pré-requisitos"
+# Em modo --atualizar pulamos tudo isso: a máquina já provou que tem Node 22 e
+# Swift funcional quando fez a primeira instalação. Re-checar só atrapalha o
+# caminho rápido do auto-update.
+if [ "$MODO_ATUALIZAR" = 0 ]; then
+  passo "Conferindo pré-requisitos"
 
-if [[ "$(uname)" != "Darwin" ]]; then
-  echo "  ✗ Este instalador é para macOS."
-  echo "    Em Windows ou Linux, use a extensão do Chrome:"
-  echo "    veja extensao-chrome/LEIA-ME.md"
-  exit 1
-fi
-echo "  ✓ macOS $(sw_vers -productVersion)"
+  if [[ "$(uname)" != "Darwin" ]]; then
+    echo "  ✗ Este instalador é para macOS."
+    echo "    Em Windows ou Linux, use a extensão do Chrome:"
+    echo "    veja extensao-chrome/LEIA-ME.md"
+    exit 1
+  fi
+  echo "  ✓ macOS $(sw_vers -productVersion)"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "  ✗ Node.js não encontrado. Instale de https://nodejs.org (versão 22 ou maior)."
-  exit 1
-fi
-VERSAO_NODE="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$VERSAO_NODE" -lt 22 ]; then
-  echo "  ✗ Node $(node -v) é antigo. O daemon usa o WebSocket nativo do Node 22+."
-  exit 1
-fi
-echo "  ✓ Node $(node -v)"
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ✗ Node.js não encontrado. Instale de https://nodejs.org (versão 22 ou maior)."
+    exit 1
+  fi
+  VERSAO_NODE="$(node -p 'process.versions.node.split(".")[0]')"
+  if [ "$VERSAO_NODE" -lt 22 ]; then
+    echo "  ✗ Node $(node -v) é antigo. O daemon usa o WebSocket nativo do Node 22+."
+    exit 1
+  fi
+  echo "  ✓ Node $(node -v)"
 
-NODE_CAMINHO="$(command -v node)"
-echo "  ✓ node em $NODE_CAMINHO"
-
-if ! swiftc --version >/dev/null 2>&1; then
-  echo "  ✗ Compilador Swift indisponível. Rode: xcode-select --install"
-  exit 1
+  if ! swiftc --version >/dev/null 2>&1; then
+    echo "  ✗ Compilador Swift indisponível. Rode: xcode-select --install"
+    exit 1
+  fi
+  printf '%s\n' 'import AppKit' 'print("ok")' > "/tmp/mm-teste-$$.swift"
+  if swiftc -o "/tmp/mm-teste-$$" "/tmp/mm-teste-$$.swift" 2>/dev/null; then
+    echo "  ✓ Swift compila"
+  else
+    echo "  ✗ O Swift não compila nesta máquina (SDK quebrado?)."
+    echo "    Rode: $RAIZ/bin/consertar-clt.sh"
+    rm -f "/tmp/mm-teste-$$" "/tmp/mm-teste-$$.swift"
+    exit 1
+  fi
+  rm -f "/tmp/mm-teste-$$" "/tmp/mm-teste-$$.swift"
 fi
-printf '%s\n' 'import AppKit' 'print("ok")' > "/tmp/mm-teste-$$.swift"
-if swiftc -o "/tmp/mm-teste-$$" "/tmp/mm-teste-$$.swift" 2>/dev/null; then
-  echo "  ✓ Swift compila"
-else
-  echo "  ✗ O Swift não compila nesta máquina (SDK quebrado?)."
-  echo "    Rode: $RAIZ/bin/consertar-clt.sh"
-  falhou=1
-fi
-rm -f "/tmp/mm-teste-$$" "/tmp/mm-teste-$$.swift"
-[ $falhou -eq 1 ] && exit 1
 
 # ------------------------------------------------------------------ pastas
 passo "Preparando pastas e permissões"
 # Descompactar pelo Finder pode perder o bit de execução dos scripts.
 chmod +x "$RAIZ"/bin/* "$RAIZ"/mmpopup/build.sh "$RAIZ"/instalar.sh 2>/dev/null
 echo "  ✓ scripts executáveis"
-# O launchd falha ao iniciar se o diretório do StandardOutPath não existir,
-# e a pasta de logs não vai no pacote (só teria lixo da outra máquina).
+# O launchd falha ao iniciar se o diretório do StandardOutPath não existir.
 mkdir -p "$RAIZ/logs"
 echo "  ✓ logs/"
 
 # ------------------------------------------------------------------ compilar
 passo "Compilando o MMPopup.app"
-bash "$RAIZ/mmpopup/build.sh" >/tmp/mm-build-$$.log 2>&1 \
-  && echo "  ✓ compilado" \
-  || { echo "  ✗ falhou:"; grep -E "error:" /tmp/mm-build-$$.log | head -5 | sed 's/^/    /'; exit 1; }
-rm -f /tmp/mm-build-$$.log
+BUILD_LOG="${TMPDIR:-/tmp}/mm-build-$$.log"
+if ! bash "$RAIZ/mmpopup/build.sh" >"$BUILD_LOG" 2>&1; then
+  echo "  ✗ falhou:"
+  grep -E "error:" "$BUILD_LOG" | head -5 | sed 's/^/    /'
+  rm -f "$BUILD_LOG"
+  exit 3
+fi
+echo "  ✓ compilado"
+rm -f "$BUILD_LOG"
 
 # ------------------------------------------------------------------- atalhos
 passo "Criando atalhos de linha de comando"
@@ -79,39 +113,75 @@ for c in mm-ctl mm-login mm-test mm-verificar mm-doutor; do
 done
 echo "  ✓ mm-ctl, mm-login, mm-test, mm-verificar em ~/.local/bin"
 
-if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
-  echo "  ⚠ ~/.local/bin não está no PATH. Adicione ao seu ~/.zshrc:"
-  echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+if [ "$MODO_ATUALIZAR" = 0 ]; then
+  if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
+    echo "  ⚠ ~/.local/bin não está no PATH. Adicione ao seu ~/.zshrc:"
+    echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+  fi
 fi
 
 # --------------------------------------------------------- caminhos do plist
 passo "Ajustando o serviço para esta máquina"
 PLIST="$RAIZ/com.cauatoledo.mmnotify.plist"
-# O launchd não herda o PATH do shell: precisa do caminho absoluto do node,
-# e os caminhos do projeto mudam de máquina para máquina.
-python3 - "$PLIST" "$NODE_CAMINHO" "$RAIZ" <<'PY'
+# O plist agora usa `node` por nome + EnvironmentVariables.PATH; só os paths
+# internos do projeto (raiz e src/index.js) precisam ser patchados.
+python3 - "$PLIST" "$RAIZ" <<'PY'
 import sys, re, pathlib
-plist, node, raiz = sys.argv[1], sys.argv[2], sys.argv[3]
+plist, raiz = sys.argv[1], sys.argv[2]
 p = pathlib.Path(plist); s = p.read_text()
-s = re.sub(r"<string>[^<]*/bin/node</string>", f"<string>{node}</string>", s)
 s = re.sub(r"<string>[^<]*/mm-notify(/[^<]*)?</string>",
            lambda m: f"<string>{raiz}{m.group(1) or ''}</string>", s)
 p.write_text(s)
 PY
-plutil -lint "$PLIST" >/dev/null && echo "  ✓ plist ajustado para $RAIZ"
+plutil -lint "$PLIST" >/dev/null && echo "  ✓ plist ajustado para $RAIZ" || {
+  echo "  ✗ plist ficou inválido após patch"
+  exit 4
+}
 
 # --------------------------------------------------------------------- login
+# Em modo --atualizar, exigir que as credenciais já existam. Se não existirem,
+# falhar com código distinto — é erro de configuração do usuário, não de
+# pré-requisito do sistema.
 passo "Login no Mattermost"
 if security find-generic-password -a mm-notify -s mm-notify-token >/dev/null 2>&1; then
-  echo "  ✓ credenciais já existem no Keychain (pule com Ctrl-C se quiser mantê-las)"
+  echo "  ✓ credenciais já existem no Keychain"
+else
+  if [ "$MODO_ATUALIZAR" = 1 ]; then
+    echo "  ✗ Credenciais não estão no Keychain."
+    echo "    Rode mm-login uma vez antes de atualizar."
+    exit 2
+  fi
+  "$RAIZ/bin/mm-login" || { echo "  ✗ login não concluído; rode mm-login e depois mm-ctl instalar"; exit 1; }
 fi
-"$RAIZ/bin/mm-login" || { echo "  ✗ login não concluído; rode mm-login e depois mm-ctl instalar"; exit 1; }
 
 # ------------------------------------------------------------------- serviço
 passo "Instalando o serviço"
-"$RAIZ/bin/mm-ctl" instalar || exit 1
+"$RAIZ/bin/mm-ctl" instalar || exit 4
 
 # --------------------------------------------------------------- verificação
 passo "Verificando ponta a ponta"
 sleep 3
-"$RAIZ/bin/mm-verificar"
+"$RAIZ/bin/mm-verificar" || exit 5
+
+# Persistir a versão instalada em config.json para o updater saber o que está
+# rodando. Em modo normal, parte de 1.0.0; em --atualizar, o bin/mm-atualizar já
+# gravou o valor novo e nós só garantimos que ele existe.
+if [ -f "$RAIZ/config.json" ]; then
+  python3 - "$RAIZ/config.json" <<'PY'
+import json, pathlib, sys, os
+p = pathlib.Path(sys.argv[1])
+try:
+    cfg = json.loads(p.read_text() or "{}")
+except Exception:
+    cfg = {}
+cfg.setdefault("_interno", {})
+cfg["_interno"].setdefault("versaoInstalada", os.environ.get("MM_NOTIFY_VERSAO", "1.0.0"))
+cfg["_interno"].setdefault("ultimaVerificacao", None)
+# Separar bloco interno do resto na impressão, mas manter no mesmo arquivo.
+p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
+PY
+  echo "  ✓ versão registrada em config.json"
+fi
+
+echo ""
+echo "  ✓ Concluído."

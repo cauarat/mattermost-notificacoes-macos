@@ -10,6 +10,15 @@ AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$AQUI/MMPopup.app"
 BUNDLE_ID="group.actuar.mmnotify"
 
+# Versão injetada via TAG (CI) ou lida do package.json (instalação local).
+# Sem nenhuma das duas, cai para 1.0.0 — comportamento histórico.
+VERSAO="${TAG:-}"
+if [ -z "$VERSAO" ] && command -v node >/dev/null 2>&1 && [ -f "$AQUI/../package.json" ]; then
+  VERSAO="v$(node -p "require('$AQUI/../package.json').version" 2>/dev/null || echo)"
+fi
+VERSAO="${VERSAO#v}"
+[ -z "$VERSAO" ] && VERSAO="1.0.0"
+
 echo "==> Limpando build anterior"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -31,8 +40,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key>      <string>MMPopup</string>
     <key>CFBundleIdentifier</key>      <string>$BUNDLE_ID</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>1.0.0</string>
-    <key>CFBundleVersion</key>         <string>1</string>
+    <key>CFBundleShortVersionString</key> <string>$VERSAO</string>
+    <key>CFBundleVersion</key>         <string>$VERSAO</string>
     <key>LSMinimumSystemVersion</key>  <string>13.0</string>
     <!-- LSUIElement: sem ícone no Dock, sem menu. -->
     <key>LSUIElement</key>             <true/>

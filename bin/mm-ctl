@@ -135,8 +135,45 @@ case "${1:-status}" in
     tail -n 40 -f "$LOG" "$ERR"
     ;;
 
+  atualizar)
+    # Auto-update a partir de GitHub Releases. Delega para bin/mm-atualizar;
+    # se ele não existir (instalação antiga), avisa em vez de falhar.
+    if [ ! -x "$RAIZ/bin/mm-atualizar" ]; then
+      echo "✗ bin/mm-atualizar não encontrado nesta instalação."
+      echo "  Atualize manualmente: cd $RAIZ && git pull"
+      exit 1
+    fi
+    exec node "$RAIZ/bin/mm-atualizar" "$@"
+    ;;
+
+  checar-atualizacao)
+    # Igual a `atualizar`, mas só consulta a API — não baixa nem modifica nada.
+    # Usado pelo menu-bar do wrapper para avisar sem instalar.
+    if [ ! -x "$RAIZ/bin/mm-atualizar" ]; then
+      echo "sem atualizador instalado"; exit 0
+    fi
+    # Implementação mínima: chama o atualizador com --checar (que ele entende).
+    exec node "$RAIZ/bin/mm-atualizar" --checar
+    ;;
+
+  reinstalar)
+    # Repatcha o plist para apontar para o caminho atual do projeto.
+    # Útil quando o usuário move ~/mm-notify para outro lugar.
+    PLIST="$RAIZ/$ROTULO.plist"
+    python3 - "$PLIST" "$RAIZ" <<'PY'
+import sys, re, pathlib
+plist, raiz = sys.argv[1], sys.argv[2]
+p = pathlib.Path(plist); s = p.read_text()
+s = re.sub(r"<string>[^<]*/mm-notify(/[^<]*)?</string>",
+           lambda m: f"<string>{raiz}{m.group(1) or ''}</string>", s)
+p.write_text(s)
+PY
+    "$EU" restart
+    echo "✓ plist reapontado para $RAIZ"
+    ;;
+
   *)
-    echo "uso: $EU {instalar|desinstalar|start|stop|restart|status|logs}"
+    echo "uso: $EU {instalar|desinstalar|start|stop|restart|status|logs|atualizar|checar-atualizacao|reinstalar}"
     exit 1
     ;;
 esac

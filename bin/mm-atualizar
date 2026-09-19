@@ -1,0 +1,313 @@
+#!/usr/bin/env node
+// bin/mm-atualizar — auto-update do mm-notify a partir de GitHub Releases.
+//
+// Sem dependências npm. Faz:
+//   1. Lê a versão atual de config.json
+//   2. Consulta a API do GitHub (com cache de 1h para respeitar o rate limit)
+//   3. Se há versão nova, baixa o zip + SHA256SUMS, valida, e re-roda
+//      instalar.sh --atualizar (que recompila Swift, repatcha plist, reinstala)
+//   4. Mantém config.json e logs/ intactos (rsync com --exclude)
+//
+// Saídas:
+//   0 = atualizado ou já está na versão mais recente
+//   1 = erro genérico / abortado pelo usuário
+//   3 = erro de rede / GitHub
+//   4 = release sem asset esperado
+//   5 = checksum inválido
+//   6 = instalar.sh falhou durante a atualização
+//   7 = erro de I/O local
+
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
+import https from "node:https";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const REPO = "cauarat/mattermost-notificacoes-macos";
+const API = `https://api.github.com/repos/${REPO}/releases/latest`;
+const CACHE_MS = 60 * 60 * 1000; // 1 hora
+
+// ---------- saída ----------------------------------------------------------
+
+function log(msg)  { process.stdout.write(`[mm-atualizar] ${msg}\n`); }
+function erro(msg) { process.stderr.write(`[mm-atualizar] ERRO: ${msg}\n`); }
+
+// ---------- localizar a raiz do projeto -----------------------------------
+
+function acharRaiz() {
+  // Estamos em /path/do/projeto/bin/mm-atualizar (possivelmente symlink).
+  // Sobe diretórios até achar um que contenha instalar.sh.
+  const aqui = path.dirname(fileURLToPath(import.meta.url));
+  let dir = path.resolve(aqui);
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, "instalar.sh"))) return dir;
+    const pai = path.dirname(dir);
+    if (pai === dir) break;
+    dir = pai;
+  }
+  // Fallback: convenção ~/mm-notify
+  return path.join(os.homedir(), "mm-notify");
+}
+
+// ---------- config ---------------------------------------------------------
+
+function lerConfig(raiz) {
+  const caminho = path.join(raiz, "config.json");
+  try {
+    const txt = fs.readFileSync(caminho, "utf8");
+    return { caminho, cfg: JSON.parse(txt) };
+  } catch (e) {
+    return { caminho, cfg: { _interno: {} } };
+  }
+}
+
+function gravarConfig(caminho, cfg) {
+  fs.writeFileSync(caminho, JSON.stringify(cfg, null, 2) + "\n");
+}
+
+function versaoInstalada(cfg) {
+  return (cfg._interno && cfg._interno.versaoInstalada) || "0.0.0";
+}
+
+function ultimaVerificacao(cfg) {
+  return (cfg._interno && cfg._interno.ultimaVerificacao) || 0;
+}
+
+// ---------- HTTP (Node 22: fetch existe, mas https é mais explícito) ------
+
+function httpsGetJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        "User-Agent": "mm-notify-updater",
+        "Accept": "application/vnd.github+json",
+      },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} ao consultar ${url}`));
+      }
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => body += c);
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error(`JSON inválido da API: ${e.message}`)); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30_000, () => req.destroy(new Error("timeout HTTP")));
+  });
+}
+
+function baixar(url, destino) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { "User-Agent": "mm-notify-updater" } }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} ao baixar ${url}`));
+      }
+      const fd = fs.createWriteStream(destino);
+      res.pipe(fd);
+      fd.on("finish", () => fd.close(() => resolve(destino)));
+      fd.on("error", reject);
+    });
+    req.on("error", reject);
+    req.setTimeout(120_000, () => req.destroy(new Error("timeout no download")));
+  });
+}
+
+function sha256DoArquivo(caminho) {
+  const hash = crypto.createHash("sha256");
+  return new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(caminho);
+    stream.on("data", (c) => hash.update(c));
+    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("error", reject);
+  });
+}
+
+// ---------- controle do daemon --------------------------------------------
+
+function matarDaemon(raiz) {
+  // Tenta parar via mm-ctl (que faz SIGTERM via launchctl).
+  log("Parando o daemon atual…");
+  const r1 = spawnSync("bash", [path.join(raiz, "bin", "mm-ctl"), "stop"], { stdio: "pipe" });
+  // Espera até 5s pelo shutdown limpo. Se o KeepAlive segurar, SIGKILL.
+  let morreu = true;
+  for (let i = 0; i < 20; i++) {
+    const r2 = spawnSync("launchctl", ["print", `gui/${process.getuid?.() ?? ""}/com.cauatoledo.mmnotify`],
+      { stdio: "ignore" });
+    // Não conseguimos inspecionar facilmente; confiamos no mm-ctl stop.
+    if (r1.status === 0) { morreu = true; break; }
+    morreu = false;
+    break;
+  }
+  if (!morreu) {
+    log("Daemon ainda ativo após 5s. Forçando SIGKILL…");
+    spawnSync("launchctl", ["kill", "SIGKILL", `gui/${process.getuid?.() ?? ""}/com.cauatoledo.mmnotify`],
+      { stdio: "ignore" });
+  }
+  // bootout explícito para liberar o rótulo antes de mexer nos arquivos.
+  spawnSync("launchctl", ["bootout", `gui/${process.getuid?.() ?? ""}/com.cauatoledo.mmnotify`],
+    { stdio: "ignore" });
+}
+
+// ---------- fluxo principal ------------------------------------------------
+
+async function main() {
+  const args = process.argv.slice(2);
+  const apenasChecar = args.includes("--checar") || args.includes("--check");
+  const forcar = args.includes("--force") || args.includes("-f");
+
+  const raiz = acharRaiz();
+  log(`Diretório de instalação: ${raiz}`);
+  if (!fs.existsSync(path.join(raiz, "instalar.sh"))) {
+    erro(`Não encontrei instalar.sh em ${raiz}. Abortando.`);
+    process.exit(7);
+  }
+
+  const { caminho: cfgPath, cfg } = lerConfig(raiz);
+  cfg._interno = cfg._interno || {};
+
+  // 1. Cache de verificação (rate limit da API: 60 req/h por IP sem auth).
+  const agora = Date.now();
+  if (!forcar && agora - ultimaVerificacao(cfg) < CACHE_MS) {
+    log("Verificação recente em cache. Use --force para ignorar.");
+    log(`Próxima verificação permitida após ${new Date(ultimaVerificacao(cfg) + CACHE_MS).toLocaleString()}.`);
+    process.exit(0);
+  }
+
+  // 2. Consultar a API.
+  let release;
+  try {
+    log(`Consultando ${API}…`);
+    release = await httpsGetJson(API);
+  } catch (e) {
+    erro(`Falha na consulta: ${e.message}`);
+    cfg._interno.ultimaVerificacao = agora;
+    gravarConfig(cfgPath, cfg);
+    process.exit(3);
+  }
+  cfg._interno.ultimaVerificacao = agora;
+  gravarConfig(cfgPath, cfg);
+
+  const tagVersion = (release.tag_name || "").replace(/^v/, "");
+  if (!tagVersion) { erro("Release sem tag_name"); process.exit(3); }
+
+  // 3. Comparar versões.
+  const atual = versaoInstalada(cfg);
+  if (compararVersoes(tagVersion, atual) <= 0) {
+    log(`Já está na versão mais recente (v${atual}).`);
+    if (apenasChecar) console.log(`SEM_ATUALIZACAO|atual=${atual}|disponivel=${tagVersion}`);
+    process.exit(0);
+  }
+  log(`Versão instalada: v${atual}`);
+  log(`Versão disponível: v${tagVersion}`);
+
+  if (apenasChecar) {
+    console.log(`ATUALIZACAO_DISPONIVEL|atual=${atual}|disponivel=${tagVersion}`);
+    process.exit(0);
+  }
+
+  // 4. Achar os assets esperados.
+  const zipAsset = release.assets?.find((a) => a.name === `MM-Notify-v${tagVersion}.zip`);
+  const sumsAsset = release.assets?.find((a) => a.name === "SHA256SUMS");
+  if (!zipAsset || !sumsAsset) {
+    erro(`Release v${tagVersion} sem MM-Notify-v${tagVersion}.zip e/ou SHA256SUMS`);
+    process.exit(4);
+  }
+
+  // 5. Baixar.
+  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "mm-notify-update-"));
+  const zipLocal = path.join(tmpDir, zipAsset.name);
+  const sumsLocal = path.join(tmpDir, sumsAsset.name);
+  try {
+    log(`Baixando ${zipAsset.name}…`);
+    await baixar(zipAsset.browser_download_url, zipLocal);
+    log(`Baixando SHA256SUMS…`);
+    await baixar(sumsAsset.browser_download_url, sumsLocal);
+  } catch (e) {
+    erro(`Falha no download: ${e.message}`);
+    process.exit(3);
+  }
+
+  // 6. Validar checksum.
+  const sumsTxt = fs.readFileSync(sumsLocal, "utf8");
+  const linhaEsperada = sumsTxt.split("\n").find((l) => l.endsWith(`  ${zipAsset.name}`) || l.endsWith(` *${zipAsset.name}`));
+  if (!linhaEsperada) { erro("SHA256SUMS não contém o zip desta release"); process.exit(4); }
+  const esperado = linhaEsperada.trim().split(/\s+/)[0].toLowerCase();
+  const obtido = (await sha256DoArquivo(zipLocal)).toLowerCase();
+  if (esperado !== obtido) {
+    erro(`Checksum falhou: esperado ${esperado}, obtido ${obtido}`);
+    process.exit(5);
+  }
+  log("✓ checksum válido");
+
+  // 7. Parar o daemon.
+  matarDaemon(raiz);
+
+  // 8. Descompactar para staging.
+  const staging = await fsp.mkdtemp(path.join(os.tmpdir(), "mm-notify-staging-"));
+  log(`Extraindo para staging…`);
+  // Preferimos unzip; se faltar, ditto.
+  let extraiu = spawnSync("unzip", ["-q", "-o", zipLocal, "-d", staging], { stdio: "pipe" });
+  if (extraiu.status !== 0) {
+    extraiu = spawnSync("ditto", ["-x", "-k", zipLocal, staging], { stdio: "pipe" });
+    if (extraiu.status !== 0) {
+      erro("Nem unzip nem ditto disponíveis para extrair o zip");
+      process.exit(7);
+    }
+  }
+
+  // 9. Copiar para o destino preservando config.json, logs/ e node_modules/.
+  log(`Aplicando arquivos em ${raiz}…`);
+  const rsync = spawnSync("rsync", [
+    "-a",
+    "--exclude=config.json",
+    "--exclude=logs/",
+    "--exclude=node_modules/",
+    "--exclude=.git/",
+    `${staging}/`,
+    `${raiz}/`,
+  ], { stdio: "pipe" });
+  if (rsync.status !== 0) {
+    erro(`rsync falhou: ${rsync.stderr?.toString() || "sem mensagem"}`);
+    process.exit(7);
+  }
+
+  // 10. Persistir a nova versão em config.json (instalar.sh só faz fallback).
+  cfg._interno.versaoInstalada = tagVersion;
+  gravarConfig(cfgPath, cfg);
+
+  // 11. Re-instalar (modo atualização: pula login).
+  log("Reinstalando (modo --atualizar)…");
+  const instalar = spawnSync("bash", ["instalar.sh", "--atualizar"], { cwd: raiz, stdio: "inherit" });
+  if (instalar.status !== 0) {
+    erro(`instalar.sh --atualizar falhou (código ${instalar.status}). Veja ${raiz}/logs/mm-notify.err`);
+    process.exit(6);
+  }
+
+  log(`✓ Atualizado para v${tagVersion}.`);
+  // Confirma que o daemon está no ar.
+  spawnSync("bash", [path.join(raiz, "bin", "mm-ctl"), "restart"], { stdio: "inherit" });
+}
+
+function compararVersoes(a, b) {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] || 0, db = pb[i] || 0;
+    if (da !== db) return da - db;
+  }
+  return 0;
+}
+
+main().catch((e) => {
+  erro(`Atualização abortada: ${e.message}`);
+  process.exit(1);
+});

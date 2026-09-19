@@ -1,5 +1,6 @@
-# Binário compilado — cada máquina roda mmpopup/build.sh
+# Binários compilados — cada máquina roda os build.sh
 mmpopup/MMPopup.app/
+instalador/MM-Notify.app/
 
 # Logs de execução
 logs/

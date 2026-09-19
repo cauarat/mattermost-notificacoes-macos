@@ -1,0 +1,55 @@
+name: release
+
+# Dispara quando uma tag no formato v*.*.* é empurrada. Cria o .zip de
+# distribuição + SHA256SUMS e anexa ao GitHub Release.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & publish release
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
+      - name: Build Swift popup (injeta versão)
+        run: TAG=${{ github.ref_name }} bash mmpopup/build.sh
+
+      - name: Build wrapper .app (injeta versão)
+        run: TAG=${{ github.ref_name }} bash instalador/fonte/build.sh
+
+      - name: Zip (exclui git, logs, node_modules, .app pré-compilado)
+        run: |
+          ASSET="MM-Notify-${{ github.ref_name }}.zip"
+          zip -r "$ASSET" . \
+            -x '.git/*' \
+            -x 'logs/*' \
+            -x 'node_modules/*' \
+            -x '.DS_Store' \
+            -x 'testes/*' \
+            -x 'extensao-chrome/node_modules/*' \
+            -x 'instalador/MM-Notify.app/Contents/MacOS/.MM-Notify.SECONDARY' \
+            -x 'mmpopup/MMPopup.app/Contents/MacOS/.MMPopup.SECONDARY'
+          ls -lh "$ASSET"
+
+      - name: SHA256SUMS
+        run: shasum -a 256 MM-Notify-*.zip > SHA256SUMS
+        working-directory: ${{ github.workspace }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            MM-Notify-${{ github.ref_name }}.zip
+            SHA256SUMS
