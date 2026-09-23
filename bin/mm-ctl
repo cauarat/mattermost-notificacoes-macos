@@ -171,6 +171,12 @@ case "${1:-status}" in
     exec node "$RAIZ/bin/mm-atualizar" "$@"
     ;;
 
+  token)
+    # Token de leitura do GitHub para o atualizador (o repositório é privado).
+    shift
+    exec node "$RAIZ/bin/mm-token" "$@"
+    ;;
+
   checar-atualizacao)
     # Igual a `atualizar`, mas só consulta a API — não baixa nem modifica nada.
     # Usado pelo menu-bar do wrapper para avisar sem instalar.
@@ -198,7 +204,7 @@ PY
     ;;
 
   *)
-    echo "uso: $EU {instalar|desinstalar|start|stop|restart|status|logs|atualizar|checar-atualizacao|reinstalar}"
+    echo "uso: $EU {instalar|desinstalar|start|stop|restart|status|logs|atualizar|checar-atualizacao|token|reinstalar}"
     exit 1
     ;;
 esac

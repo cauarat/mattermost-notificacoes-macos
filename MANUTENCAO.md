@@ -219,6 +219,34 @@ Escolha um: desmarque "Extensão ligada" nas opções da extensão, ou rode
 
 ---
 
+### `mm-ctl atualizar` falha com "HTTP 404"
+
+O repositório é privado. Sem token, o GitHub responde 404 como se ele não
+existisse. Rode `mm-ctl token`, cole um token de leitura (o LEIA-ME explica
+como criar) e depois `mm-ctl atualizar --force`.
+
+Se `mm-ctl token` responder "comando desconhecido", a instalação é anterior à
+v1.2.1 e o atualizador dela não sabe usar token. Instale a versão nova à mão,
+uma única vez:
+
+1. Com a sua conta do GitHub aberta no navegador, baixe o
+   `MM-Notify-vX.Y.Z.zip` da release mais recente.
+2. No Terminal (troque o nome do arquivo pelo que você baixou):
+
+```bash
+cd ~/Downloads && rm -rf mm-novo && mkdir mm-novo \
+  && unzip -q MM-Notify-vX.Y.Z.zip -d mm-novo \
+  && rsync -a --exclude=config.json --exclude=logs/ mm-novo/ ~/mm-notify/ \
+  && cd ~/mm-notify && bash instalar.sh --atualizar \
+  && mm-ctl token
+```
+
+O Safari descompacta o zip sozinho e cria uma pasta `MM-Notify-vX.Y.Z`. Nesse
+caso, troque as três primeiras linhas por
+`cd ~/Downloads && rsync -a --exclude=config.json --exclude=logs/ MM-Notify-vX.Y.Z/ ~/mm-notify/ \`.
+
+A partir daí as versões novas chegam sozinhas.
+
 ## Tarefas do dia a dia
 
 Depois de editar `config.json`, **sempre** rode `mm-ctl restart`.
@@ -340,4 +368,5 @@ mm-ctl logs          # acompanhar ao vivo (Ctrl-C sai)
 mm-ctl restart       # aplicar mudanças / destravar
 mm-login             # senha mudou, ou caixa pedindo senha do Mac
 mm-test --todos      # só o visual e o som
+mm-ctl token         # token do GitHub para a atualização automática
 ```

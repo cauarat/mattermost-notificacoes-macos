@@ -178,12 +178,30 @@ try:
 except Exception:
     cfg = {}
 cfg.setdefault("_interno", {})
+# A versão dos arquivos instalados é a do package.json, carimbada pela release.
+# Sem isto, quem instala copiando o zip à mão ficaria registrado com a versão
+# antiga, e o atualizador baixaria de novo a mesma release.
+try:
+    versao = json.loads((p.parent / "package.json").read_text())["version"]
+except Exception:
+    versao = None
+if versao:
+    cfg["_interno"]["versaoInstalada"] = versao
 cfg["_interno"].setdefault("versaoInstalada", os.environ.get("MM_NOTIFY_VERSAO", "1.0.0"))
 cfg["_interno"].setdefault("ultimaVerificacao", None)
 # Separar bloco interno do resto na impressão, mas manter no mesmo arquivo.
 p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
 PY
   echo "  ✓ versão registrada em config.json"
+fi
+
+# O repositório é privado: sem token do GitHub a atualização automática não
+# enxerga as releases.
+if ! security find-generic-password -a mm-notify -s mm-notify-github >/dev/null 2>&1 \
+   && ! gh auth token >/dev/null 2>&1; then
+  echo ""
+  echo "  ⚠ Atualização automática sem token do GitHub. Para ativá-la, rode:"
+  echo "      mm-ctl token"
 fi
 
 echo ""

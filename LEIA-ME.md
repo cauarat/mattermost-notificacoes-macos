@@ -50,7 +50,14 @@ Após isso, o daemon sobe sozinho a cada login, e as versões novas chegam sozin
 
 No macOS, um serviço à parte (`com.cauatoledo.mmnotify.atualizar`) verifica no login e a cada 6 horas se há release nova no GitHub. Quando encontra, baixa o zip, valida o SHA256 e re-roda o instalador em modo `--atualizar`, que pula o login e mantém seu `config.json` e seus `logs/` intactos. O registro fica em `logs/mm-atualizar.log`, e `mm-ctl status` mostra se a atualização automática está ligada.
 
-Instalações feitas antes da v1.2.0 não têm esse serviço: atualize uma vez à mão (`mm-ctl atualizar --force`) e ele passa a existir. Para desligá-lo, ponha `"atualizacaoAutomatica": false` no `config.json`.
+**Token do GitHub (uma vez por máquina).** O repositório é privado, e sem login o GitHub responde 404 como se ele não existisse. O atualizador precisa de um token só de leitura:
+
+1. Crie em <https://github.com/settings/personal-access-tokens/new>: *Repository access* → só `mattermost-notificacoes-macos`; *Permissions* → *Contents: Read-only*; a validade mais longa que aceitar.
+2. Rode `mm-ctl token` e cole. Ele confere o acesso antes de guardar o token no Keychain.
+
+Se a máquina tiver o GitHub CLI logado (`gh auth login`), ele é usado sem precisar do passo acima. Quando o token vencer, `logs/mm-atualizar.log` avisa; é só rodar `mm-ctl token` de novo.
+
+Instalações anteriores à v1.2.1 têm um atualizador que não sabe usar token, então precisam receber a v1.2.1 à mão uma vez (veja o MANUTENCAO.md). Para desligar a atualização automática, ponha `"atualizacaoAutomatica": false` no `config.json`.
 
 Para forçar a checagem manualmente:
 
