@@ -77,10 +77,16 @@ const principal = async () => {
     await espera(1200);
   }
 
-  // Mantém o processo vivo enquanto os popups estão na tela.
-  const vida = (cfg.duracaoPopupSegundos + 3) * 1000;
-  console.log(`\nAguardando ${Math.round(vida / 1000)}s até os popups sumirem…`);
-  await espera(vida);
+  // Os popups não somem sozinhos, mas somem se este processo encerrar: por
+  // isso o teste só termina quando você pede.
+  console.log("\nOs popups ficam na tela até você clicar neles (abre a conversa) ou no X.");
+  console.log("Pressione Enter aqui para encerrar o teste.");
+  await new Promise((fim) => {
+    process.stdin.once("data", fim);
+    process.stdin.once("end", fim);
+    process.stdin.resume();
+  });
+  process.stdin.pause();
   pararPopup();
 };
 

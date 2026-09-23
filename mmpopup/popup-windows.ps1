@@ -2,6 +2,7 @@
 #
 # Equivalente ao MMPopup.app (Swift) do macOS: le um JSON por linha no stdin e,
 # para cada um, mostra uma janela flutuante no canto da tela e toca um som.
+# A janela fica ate ser clicada (abre a conversa) ou fechada no X.
 #
 # Usa WinForms via PowerShell: nao exige instalar nada: .NET Framework e o
 # PowerShell ja vem no Windows 10 e 11.
@@ -121,17 +122,21 @@ function Mostrar-Popup($alerta) {
   $rotulo.Location  = New-Object System.Drawing.Point($x, 12)
   $fundo.Controls.Add($rotulo)
 
-  $contagem = New-Object System.Windows.Forms.Label
-  $restante = if ($alerta.duracao) { [int]$alerta.duracao } else { 12 }
-  $contagem.Text      = "${restante}s"
-  $contagem.ForeColor = [System.Drawing.Color]::FromArgb(154, 164, 178)
-  $contagem.Font      = $fonteRotulo
-  $contagem.AutoSize  = $false
-  $contagem.TextAlign = 'MiddleRight'
-  $contagem.Width     = 40
-  $contagem.Height    = 12
-  $contagem.Location  = New-Object System.Drawing.Point(($LARGURA - 58), 12)
-  $fundo.Controls.Add($contagem)
+  # O X fecha sem abrir a conversa.
+  $cinzaX   = [System.Drawing.Color]::FromArgb(154, 164, 178)
+  $escuroX  = [System.Drawing.Color]::FromArgb(20, 23, 28)
+  $realceX  = [System.Drawing.Color]::FromArgb(238, 240, 243)
+  $fecharX = New-Object System.Windows.Forms.Label
+  $fecharX.Text      = [string][char]0x00D7   # sinal de multiplicacao; em codigo porque o arquivo e ASCII
+  $fecharX.ForeColor = $cinzaX
+  $fecharX.Font      = New-Object System.Drawing.Font('Segoe UI', 11)
+  $fecharX.AutoSize  = $false
+  $fecharX.TextAlign = 'MiddleCenter'
+  $fecharX.Width     = 22
+  $fecharX.Height    = 22
+  $fecharX.Cursor    = [System.Windows.Forms.Cursors]::Hand
+  $fecharX.Location  = New-Object System.Drawing.Point(($LARGURA - 32), 6)
+  $fundo.Controls.Add($fecharX)
 
   $nome = New-Object System.Windows.Forms.Label
   $nome.Text      = if ($alerta.remetente) { $alerta.remetente } else { 'alguem' }
@@ -173,40 +178,24 @@ function Mostrar-Popup($alerta) {
 
   $form.Height = $corpo.Bottom + 16
 
-  # Clique em qualquer lugar abre a conversa
+  # Clique em qualquer lugar abre a conversa; no X, so fecha. No WinForms o
+  # clique nao sobe para o controle pai, entao basta o X ficar fora da lista.
   $aoClicar = {
     Abrir-Link $(if ($alerta.link) { $alerta.link } else { $alerta.linkWeb })
     Fechar-Popup $form
   }.GetNewClosure()
   $form.Add_Click($aoClicar)
-  foreach ($c in @($fundo) + @($fundo.Controls)) { $c.Add_Click($aoClicar) }
+  foreach ($c in @($fundo) + @($fundo.Controls)) {
+    if ($c -ne $fecharX) { $c.Add_Click($aoClicar) }
+  }
 
-  # Contagem regressiva e fechamento automatico.
-  #
-  # O estado vive em $form.Tag, nao numa variavel de escopo script: com varios
-  # popups na tela ao mesmo tempo, uma variavel compartilhada faria todos
-  # dividirem o mesmo contador e sumirem juntos.
-  $timer = New-Object System.Windows.Forms.Timer
-  $timer.Interval = 1000
-  $form.Tag = @{ restante = $restante; contagem = $contagem; timer = $timer }
-
-  $timer.Add_Tick({
-    $f = $form
-    if ($f.IsDisposed) { $timer.Stop(); $timer.Dispose(); return }
-    $estado = $f.Tag
-    $estado.restante--
-    if ($estado.restante -le 0) {
-      $estado.timer.Stop(); $estado.timer.Dispose()
-      Fechar-Popup $f
-    } elseif (-not $estado.contagem.IsDisposed) {
-      $estado.contagem.Text = "$($estado.restante)s"
-    }
-  }.GetNewClosure())
+  $fecharX.Add_Click({ Fechar-Popup $form }.GetNewClosure())
+  $fecharX.Add_MouseEnter({ $fecharX.ForeColor = $escuroX; $fecharX.BackColor = $realceX }.GetNewClosure())
+  $fecharX.Add_MouseLeave({ $fecharX.ForeColor = $cinzaX; $fecharX.BackColor = [System.Drawing.Color]::White }.GetNewClosure())
 
   $script:ativos.Add($form) | Out-Null
   $form.Show()
   Reposicionar
-  $timer.Start()
 
   if ($alerta.somAtivado -ne $false) { Tocar-Som $tipo $alerta.som }
 }

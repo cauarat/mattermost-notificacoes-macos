@@ -41,7 +41,7 @@ echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin" \
 
 passo "Testando o popup"
 echo "  Um popup de teste deve aparecer no canto da tela."
-( printf '%s\n' '{"tipo":"dm","remetente":"mm-notify","canal":"Instalacao","corpo":"Se voce esta vendo isto, o popup funciona neste sistema.","volume":0.8,"somAtivado":true,"duracao":6,"linkWeb":""}'
+( printf '%s\n' '{"tipo":"dm","remetente":"mm-notify","canal":"Instalacao","corpo":"Se voce esta vendo isto, o popup funciona neste sistema.","volume":0.8,"somAtivado":true,"linkWeb":""}'
   sleep 8 ) | python3 "$RAIZ/mmpopup/popup-linux.py" 2>&1 | head -3
 echo "  ✓ popup executado"
 

@@ -100,7 +100,6 @@ mm-ctl desinstalar # desligar de vez, não sobe mais no login
 {
   "servidor": "https://team.actuar.group",
   "canaisMonitorados": [],
-  "duracaoPopupSegundos": 12,
   "notificacaoNativa": true,
   "som": {
     "ativado": true,
@@ -116,7 +115,6 @@ Rode `mm-ctl restart` depois de editar.
 | Campo | O que faz |
 |---|---|
 | `canaisMonitorados` | Canais que alertam mesmo sem menção. Aceita o nome interno (`financeiro`) ou o exibido (`Financeiro`). |
-| `duracaoPopupSegundos` | Quanto tempo o popup fica na tela. |
 | `notificacaoNativa` | Se `false`, só o popup sobreposto — sem banner na Central de Notificações. O banner é emitido via `osascript`. |
 | `som.volume` | 0.0 a 1.0, independente do volume do sistema. |
 | `som.porTipo` | Timbre por tipo de alerta. Aceita nome de som do sistema **ou** caminho para um arquivo (`.aiff`, `.wav`, `.mp3`). |
@@ -133,6 +131,10 @@ Rode `mm-ctl restart` depois de editar.
 3. Mensagens nos **canais listados** em `canaisMonitorados`
 
 Nunca alerta: suas próprias mensagens (mesmo enviadas de outro dispositivo) e mensagens de sistema ("fulano entrou no canal").
+
+**O popup não some sozinho.** Ele fica na tela até você clicar nele — o que abre
+aquela conversa no Mattermost — ou no **X** do canto, que só fecha. Com
+cinco popups já na tela, o próximo toma o lugar do mais antigo.
 
 ---
 

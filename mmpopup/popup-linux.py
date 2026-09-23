@@ -3,6 +3,7 @@
 
 Equivalente ao MMPopup.app (Swift) do macOS: lê um JSON por linha no stdin e,
 para cada um, mostra uma janela flutuante no canto da tela e toca um som.
+A janela fica até ser clicada (abre a conversa) ou fechada no X.
 
 Usa tkinter, que vem junto com o Python na maioria das distribuições — sem
 dependência para instalar.
@@ -93,7 +94,6 @@ class Popup:
         self.alerta = alerta
         self.aoFechar = aoFechar
         self.fechando = False
-        self.restante = int(alerta.get("duracao", 12))
 
         tipo = alerta.get("tipo", "dm")
         cor = CORES.get(tipo, CORES["dm"])
@@ -121,9 +121,13 @@ class Popup:
         cabecalho.pack(fill="x")
         tk.Label(cabecalho, text=ROTULOS.get(tipo, ROTULOS["dm"]), fg=cor,
                  bg="#ffffff", font=fonte_rotulo).pack(side="left")
-        self.contagem = tk.Label(cabecalho, text=f"{self.restante}s", fg="#9aa4b2",
-                                 bg="#ffffff", font=fonte_rotulo)
-        self.contagem.pack(side="right")
+        # O X fecha sem abrir a conversa.
+        fechar = tk.Label(cabecalho, text="✕", fg="#9aa4b2", bg="#ffffff",
+                          font=fonte_corpo, cursor="hand2", padx=4)
+        fechar.pack(side="right")
+        fechar.bind("<Button-1>", self._clique_fechar)
+        fechar.bind("<Enter>", lambda _e: fechar.config(fg="#14171c", bg="#eef0f3"))
+        fechar.bind("<Leave>", lambda _e: fechar.config(fg="#9aa4b2", bg="#ffffff"))
 
         tk.Label(corpo, text=alerta.get("remetente", "alguém"), fg="#14171c",
                  bg="#ffffff", font=fonte_nome, anchor="w").pack(fill="x", pady=(6, 0))
@@ -137,14 +141,15 @@ class Popup:
                  font=fonte_corpo, anchor="w", justify="left",
                  wraplength=LARGURA - 46).pack(fill="x", pady=(8, 0))
 
-        # Clique em qualquer lugar abre a conversa
-        self._ligar_clique(self.win)
+        # Clique em qualquer lugar abre a conversa. Ligado só na janela: todo
+        # widget filho a tem nos bindtags, então o clique chega aqui de
+        # qualquer ponto — menos do X, que interrompe a cadeia.
+        self.win.bind("<Button-1>", lambda _e: self.clicado())
         self.win.update_idletasks()
 
-    def _ligar_clique(self, widget):
-        widget.bind("<Button-1>", lambda _e: self.clicado())
-        for filho in widget.winfo_children():
-            self._ligar_clique(filho)
+    def _clique_fechar(self, _evento):
+        self.fechar()
+        return "break"   # não deixa o clique seguir até a janela e abrir a conversa
 
     def altura(self):
         return self.win.winfo_reqheight()
@@ -158,19 +163,10 @@ class Popup:
         tocar(self.alerta.get("tipo", "dm"),
               self.alerta.get("som"),
               float(self.alerta.get("volume", 0.8)))
-        self._tique()
-
-    def _tique(self):
-        if self.fechando:
-            return
-        self.restante -= 1
-        if self.restante <= 0:
-            self.fechar()
-            return
-        self.contagem.config(text=f"{self.restante}s")
-        self.win.after(1000, self._tique)
 
     def clicado(self):
+        if self.fechando:
+            return
         abrir(self.alerta.get("link") or self.alerta.get("linkWeb"))
         self.fechar()
 
