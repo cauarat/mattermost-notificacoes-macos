@@ -6,8 +6,9 @@
 
          É um serviço separado do daemon de propósito: o atualizador derruba e
          reinstala o daemon no meio do caminho, e se rodasse como filho dele
-         seria morto junto. Os caminhos são patchados pelo instalar.sh, como
-         no plist do daemon. -->
+         seria morto junto. Os caminhos são patchados pelo instalar.sh, e o
+         "node" é trocado pelo caminho absoluto no `mm-ctl instalar`, como no
+         plist do daemon. -->
     <key>Label</key>
     <string>com.cauatoledo.mmnotify.atualizar</string>
 

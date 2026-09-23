@@ -40,10 +40,36 @@ carregado() {
   fi
 }
 
+# Caminho absoluto do node, para gravar nos plists.
+#
+# O launchd NÃO usa o PATH do EnvironmentVariables para achar o programa do
+# ProgramArguments: com só "node" ali, ele não acha o executável e o serviço
+# nem sobe, sem deixar uma linha no log. Foi o que derrubou o daemon depois
+# da v1.1.0. MM_NODE vem do mm-atualizar (o node que está rodando agora).
+acharNode() {
+  local n="${MM_NODE:-}"
+  [ -x "$n" ] || n="$(command -v node 2>/dev/null)"
+  for c in /opt/homebrew/bin/node /usr/local/bin/node; do
+    [ -x "$n" ] && break
+    n="$c"
+  done
+  [ -x "$n" ] && echo "$n"
+}
+
+# Copia um plist para ~/Library/LaunchAgents trocando "node" pelo caminho absoluto.
+instalarPlist() {
+  sed "s#<string>node</string>#<string>$NODE_BIN</string>#" "$1" > "$2"
+}
+
 case "${1:-status}" in
   instalar)
+    NODE_BIN="$(acharNode)"
+    if [ -z "$NODE_BIN" ]; then
+      echo "✗ Não encontrei o node. Instale o Node 22 e rode de novo: $EU instalar"
+      exit 1
+    fi
     mkdir -p "$HOME/Library/LaunchAgents"
-    cp "$PLIST_ORIGEM" "$PLIST_DESTINO"
+    instalarPlist "$PLIST_ORIGEM" "$PLIST_DESTINO"
     # Descarrega o serviço anterior e ESPERA sumir de verdade. Sem esta espera
     # o bootstrap seguinte falha com "Input/output error", porque o launchd
     # ainda considera o rótulo em uso.
@@ -64,15 +90,18 @@ case "${1:-status}" in
     fi
     rm -f /tmp/mmctl-erro.$$
 
-    # Atualização automática. Se já está carregada, só troca o arquivo: é
-    # justamente ela que chama este comando durante uma atualização, e um
-    # bootout aqui mataria o atualizador no meio do trabalho. O arquivo novo
-    # vale a partir do próximo login.
+    # Atualização automática. Quando é ela mesma quem chama este comando
+    # (MM_ATUALIZACAO_AUTOMATICA=1), só troca o arquivo: um bootout aqui
+    # mataria o atualizador no meio do trabalho, e o arquivo novo vale a
+    # partir do próximo login. Chamado do terminal, recarrega o serviço para a
+    # definição nova valer já.
     if [ -f "$PLIST_ATU_ORIGEM" ]; then
-      cp "$PLIST_ATU_ORIGEM" "$PLIST_ATU_DESTINO"
-      if launchctl print "gui/$UID_ATUAL/$ROTULO_ATU" >/dev/null 2>&1; then
+      instalarPlist "$PLIST_ATU_ORIGEM" "$PLIST_ATU_DESTINO"
+      if [ "${MM_ATUALIZACAO_AUTOMATICA:-}" = 1 ] \
+         && launchctl print "gui/$UID_ATUAL/$ROTULO_ATU" >/dev/null 2>&1; then
         echo "✓ Atualização automática já ativa."
-      elif launchctl bootstrap "gui/$UID_ATUAL" "$PLIST_ATU_DESTINO" 2>/dev/null; then
+      elif launchctl bootout "gui/$UID_ATUAL/$ROTULO_ATU" 2>/dev/null; sleep 1; \
+           launchctl bootstrap "gui/$UID_ATUAL" "$PLIST_ATU_DESTINO" 2>/dev/null; then
         echo "✓ Atualização automática ativada (no login e a cada 6 h)."
       else
         echo "⚠ Não consegui ativar a atualização automática; use $EU atualizar."

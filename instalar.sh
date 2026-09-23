@@ -162,9 +162,31 @@ passo "Instalando o serviço"
 "$RAIZ/bin/mm-ctl" instalar || exit 4
 
 # --------------------------------------------------------------- verificação
-passo "Verificando ponta a ponta"
-sleep 3
-"$RAIZ/bin/mm-verificar" || exit 5
+if [ "$MODO_ATUALIZAR" = 1 ]; then
+  # Na atualização basta confirmar que o daemon subiu. O mm-verificar manda
+  # uma mensagem de verdade pelo Mattermost, o que não cabe numa atualização
+  # que roda sozinha, e é sensível ao tempo de reconexão logo após o restart.
+  passo "Conferindo se o daemon subiu"
+  pid=""
+  for _ in $(seq 1 30); do
+    pid="$(launchctl print "gui/$(id -u)/com.cauatoledo.mmnotify" 2>/dev/null | awk '/^\tpid = /{print $3}')"
+    [ -n "$pid" ] && break
+    sleep 0.5
+  done
+  if [ -n "$pid" ]; then
+    echo "  ✓ daemon rodando (pid $pid)"
+  else
+    echo "  ✗ o daemon não subiu. Últimas linhas de logs/mm-notify.err:"
+    tail -n 10 "$RAIZ/logs/mm-notify.err" 2>/dev/null | sed 's/^/    /'
+    launchctl print "gui/$(id -u)/com.cauatoledo.mmnotify" 2>/dev/null \
+      | grep -E "last exit|program =" | sed 's/^/    /'
+    exit 5
+  fi
+else
+  passo "Verificando ponta a ponta"
+  sleep 3
+  "$RAIZ/bin/mm-verificar" || exit 5
+fi
 
 # Persistir a versão instalada em config.json para o updater saber o que está
 # rodando. Em modo normal, parte de 1.0.0; em --atualizar, o bin/mm-atualizar já

@@ -219,6 +219,14 @@ Escolha um: desmarque "Extensão ligada" nas opções da extensão, ou rode
 
 ---
 
+### O daemon parou de subir depois de atualizar
+
+Sintoma: `mm-verificar` diz "processo NÃO está rodando", e o log não tem
+nenhuma linha nova. Entre a v1.1.0 e a v1.2.1 o arquivo do serviço chamava o
+Node só por "node", e o launchd não o encontra assim. A v1.2.2 grava o caminho
+completo. Para corrigir, rode `mm-ctl atualizar --force`, ou `mm-ctl instalar`
+se já estiver na v1.2.2.
+
 ### `mm-ctl atualizar` falha com "HTTP 404"
 
 O repositório é privado. Sem token, o GitHub responde 404 como se ele não

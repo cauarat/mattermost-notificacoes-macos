@@ -258,7 +258,14 @@ async function main() {
 
   // 11. Re-instalar (modo atualização: pula login).
   log("Reinstalando (modo --atualizar)…");
-  const instalar = spawnSync("bash", ["instalar.sh", "--atualizar"], { cwd: raiz, stdio: "inherit" });
+  // MM_NODE: o node que está rodando agora, para o mm-ctl gravar o caminho
+  // absoluto nos plists. MM_ATUALIZACAO_AUTOMATICA: avisa que quem chama é o
+  // serviço de atualização, que não pode ser recarregado no meio do trabalho.
+  const instalar = spawnSync("bash", ["instalar.sh", "--atualizar"], {
+    cwd: raiz,
+    stdio: "inherit",
+    env: { ...process.env, MM_NODE: process.execPath, ...(automatico ? { MM_ATUALIZACAO_AUTOMATICA: "1" } : {}) },
+  });
   if (instalar.status !== 0) {
     erro(`instalar.sh --atualizar falhou (código ${instalar.status}). Veja ${raiz}/logs/mm-notify.err`);
     process.exit(6);
