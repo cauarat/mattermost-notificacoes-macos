@@ -20,6 +20,10 @@ if command -v mm-ctl >/dev/null 2>&1; then EU="mm-ctl"; else EU="$ORIGEM"; fi
 ROTULO="com.cauatoledo.mmnotify"
 PLIST_ORIGEM="$RAIZ/$ROTULO.plist"
 PLIST_DESTINO="$HOME/Library/LaunchAgents/$ROTULO.plist"
+# Atualização automática: serviço à parte, que roda o mm-atualizar periodicamente.
+ROTULO_ATU="$ROTULO.atualizar"
+PLIST_ATU_ORIGEM="$RAIZ/$ROTULO_ATU.plist"
+PLIST_ATU_DESTINO="$HOME/Library/LaunchAgents/$ROTULO_ATU.plist"
 LOG="$RAIZ/logs/mm-notify.log"
 ERR="$RAIZ/logs/mm-notify.err"
 UID_ATUAL="$(id -u)"
@@ -59,11 +63,27 @@ case "${1:-status}" in
       exit 1
     fi
     rm -f /tmp/mmctl-erro.$$
+
+    # Atualização automática. Se já está carregada, só troca o arquivo: é
+    # justamente ela que chama este comando durante uma atualização, e um
+    # bootout aqui mataria o atualizador no meio do trabalho. O arquivo novo
+    # vale a partir do próximo login.
+    if [ -f "$PLIST_ATU_ORIGEM" ]; then
+      cp "$PLIST_ATU_ORIGEM" "$PLIST_ATU_DESTINO"
+      if launchctl print "gui/$UID_ATUAL/$ROTULO_ATU" >/dev/null 2>&1; then
+        echo "✓ Atualização automática já ativa."
+      elif launchctl bootstrap "gui/$UID_ATUAL" "$PLIST_ATU_DESTINO" 2>/dev/null; then
+        echo "✓ Atualização automática ativada (no login e a cada 6 h)."
+      else
+        echo "⚠ Não consegui ativar a atualização automática; use $EU atualizar."
+      fi
+    fi
     ;;
 
   desinstalar)
     launchctl bootout "gui/$UID_ATUAL/$ROTULO" 2>/dev/null
-    rm -f "$PLIST_DESTINO"
+    launchctl bootout "gui/$UID_ATUAL/$ROTULO_ATU" 2>/dev/null
+    rm -f "$PLIST_DESTINO" "$PLIST_ATU_DESTINO"
     echo "✓ Removido. Não sobe mais no login."
     ;;
 
@@ -98,6 +118,11 @@ case "${1:-status}" in
     echo "  raiz:        $RAIZ"
     if [ "$SISTEMA" = "Darwin" ]; then
       if [ -f "$PLIST_DESTINO" ]; then echo "  LaunchAgent: instalado"; else echo "  LaunchAgent: NÃO instalado (rode: $EU instalar)"; fi
+      if launchctl print "gui/$UID_ATUAL/$ROTULO_ATU" >/dev/null 2>&1; then
+        echo "  atualização: automática (no login e a cada 6 h)"
+      else
+        echo "  atualização: manual (rode: $EU instalar para ativar a automática)"
+      fi
     else
       systemctl --user is-enabled --quiet mm-notify.service 2>/dev/null \
         && echo "  serviço systemd: habilitado" || echo "  serviço systemd: NÃO habilitado (rode: bash instalar-linux.sh)"

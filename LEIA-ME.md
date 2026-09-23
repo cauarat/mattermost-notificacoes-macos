@@ -33,7 +33,7 @@ mv MM-Notify.app ~/Applications/
 #    ad-hoc-signed). O Terminal vai abrir pedindo suas credenciais do Mattermost.
 ```
 
-Após isso, o daemon sobe sozinho a cada login. Um ícone discreto no menu-bar dá acesso a "Verificar atualizações…" e a um botão "Sair".
+Após isso, o daemon sobe sozinho a cada login, e as versões novas chegam sozinhas (veja [Atualizações](#atualizações)).
 
 > Se preferir a linha de comando, o caminho antigo continua funcionando:
 >
@@ -48,7 +48,9 @@ Após isso, o daemon sobe sozinho a cada login. Um ícone discreto no menu-bar d
 
 ## Atualizações
 
-O `MM-Notify.app` no menu-bar verifica uma vez por hora se há release nova no GitHub. Quando encontra, exibe "Atualização disponível" e um botão "Atualizar agora" que baixa o zip, valida o SHA256, e re-roda o instalador em modo `--atualizar` (que pula o login e mantém seu `config.json` e seus `logs/` intactos).
+No macOS, um serviço à parte (`com.cauatoledo.mmnotify.atualizar`) verifica no login e a cada 6 horas se há release nova no GitHub. Quando encontra, baixa o zip, valida o SHA256 e re-roda o instalador em modo `--atualizar`, que pula o login e mantém seu `config.json` e seus `logs/` intactos. O registro fica em `logs/mm-atualizar.log`, e `mm-ctl status` mostra se a atualização automática está ligada.
+
+Instalações feitas antes da v1.2.0 não têm esse serviço: atualize uma vez à mão (`mm-ctl atualizar --force`) e ele passa a existir. Para desligá-lo, ponha `"atualizacaoAutomatica": false` no `config.json`.
 
 Para forçar a checagem manualmente:
 
@@ -115,6 +117,7 @@ Rode `mm-ctl restart` depois de editar.
 | Campo | O que faz |
 |---|---|
 | `canaisMonitorados` | Canais que alertam mesmo sem menção. Aceita o nome interno (`financeiro`) ou o exibido (`Financeiro`). |
+| `atualizacaoAutomatica` | Se `false`, o Mac não instala versões novas sozinho; use `mm-ctl atualizar`. Padrão: ligado. |
 | `notificacaoNativa` | Se `false`, só o popup sobreposto — sem banner na Central de Notificações. O banner é emitido via `osascript`. |
 | `som.volume` | 0.0 a 1.0, independente do volume do sistema. |
 | `som.porTipo` | Timbre por tipo de alerta. Aceita nome de som do sistema **ou** caminho para um arquivo (`.aiff`, `.wav`, `.mp3`). |

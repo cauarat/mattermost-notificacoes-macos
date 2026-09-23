@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Atualização automática: roda o bin/mm-atualizar no login e a cada 6 h.
+
+         É um serviço separado do daemon de propósito: o atualizador derruba e
+         reinstala o daemon no meio do caminho, e se rodasse como filho dele
+         seria morto junto. Os caminhos são patchados pelo instalar.sh, como
+         no plist do daemon. -->
+    <key>Label</key>
+    <string>com.cauatoledo.mmnotify.atualizar</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>node</string>
+        <string>/Users/cauatoledo/mm-notify/bin/mm-atualizar</string>
+        <string>--auto</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/cauatoledo/mm-notify</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>21600</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/cauatoledo/mm-notify/logs/mm-atualizar.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cauatoledo/mm-notify/logs/mm-atualizar.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
