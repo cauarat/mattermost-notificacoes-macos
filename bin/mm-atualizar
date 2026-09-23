@@ -22,12 +22,11 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import https from "node:https";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { API_REPO, obterToken, getJson, baixarAsset } from "../src/github.js";
 
-const REPO = "cauarat/mattermost-notificacoes-macos";
-const API = `https://api.github.com/repos/${REPO}/releases/latest`;
+const API = `${API_REPO}/releases/latest`;
 const CACHE_MS = 60 * 60 * 1000; // 1 hora
 
 // ---------- saída ----------------------------------------------------------
@@ -74,50 +73,6 @@ function versaoInstalada(cfg) {
 
 function ultimaVerificacao(cfg) {
   return (cfg._interno && cfg._interno.ultimaVerificacao) || 0;
-}
-
-// ---------- HTTP (Node 22: fetch existe, mas https é mais explícito) ------
-
-function httpsGetJson(url) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, {
-      headers: {
-        "User-Agent": "mm-notify-updater",
-        "Accept": "application/vnd.github+json",
-      },
-    }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode} ao consultar ${url}`));
-      }
-      let body = "";
-      res.setEncoding("utf8");
-      res.on("data", (c) => body += c);
-      res.on("end", () => {
-        try { resolve(JSON.parse(body)); }
-        catch (e) { reject(new Error(`JSON inválido da API: ${e.message}`)); }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(30_000, () => req.destroy(new Error("timeout HTTP")));
-  });
-}
-
-function baixar(url, destino) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { "User-Agent": "mm-notify-updater" } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode} ao baixar ${url}`));
-      }
-      const fd = fs.createWriteStream(destino);
-      res.pipe(fd);
-      fd.on("finish", () => fd.close(() => resolve(destino)));
-      fd.on("error", reject);
-    });
-    req.on("error", reject);
-    req.setTimeout(120_000, () => req.destroy(new Error("timeout no download")));
-  });
 }
 
 function sha256DoArquivo(caminho) {
@@ -191,13 +146,21 @@ async function main() {
     process.exit(0);
   }
 
-  // 2. Consultar a API.
+  // 2. Consultar a API. O repositório é privado: sem token, 404.
+  const credencial = await obterToken();
+  const token = credencial?.token ?? null;
+  log(credencial ? `Token do GitHub: ${credencial.origem}.` : "Sem token do GitHub.");
   let release;
   try {
     log(`Consultando ${API}…`);
-    release = await httpsGetJson(API);
+    release = await getJson(API, token);
   } catch (e) {
     erro(`Falha na consulta: ${e.message}`);
+    if (e.status === 404 || e.status === 401 || e.status === 403) {
+      erro(token
+        ? "O token não dá acesso ao repositório (expirou, foi revogado ou não tem permissão de leitura). Rode: mm-ctl token"
+        : "O repositório é privado e esta máquina não tem token do GitHub. Rode: mm-ctl token");
+    }
     cfg._interno.ultimaVerificacao = agora;
     gravarConfig(cfgPath, cfg);
     process.exit(3);
@@ -237,9 +200,9 @@ async function main() {
   const sumsLocal = path.join(tmpDir, sumsAsset.name);
   try {
     log(`Baixando ${zipAsset.name}…`);
-    await baixar(zipAsset.browser_download_url, zipLocal);
+    await baixarAsset(zipAsset, zipLocal, token);
     log(`Baixando SHA256SUMS…`);
-    await baixar(sumsAsset.browser_download_url, sumsLocal);
+    await baixarAsset(sumsAsset, sumsLocal, token);
   } catch (e) {
     erro(`Falha no download: ${e.message}`);
     process.exit(3);

@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+// Guarda no cofre do sistema o token do GitHub que o atualizador usa.
+//
+// O repositório é privado, então sem token a atualização automática não
+// enxerga as releases. Basta um token de leitura:
+//   github.com → Settings → Developer settings → Fine-grained tokens
+//   Repository access: só cauarat/mattermost-notificacoes-macos
+//   Permissions → Contents: Read-only
+//
+// O token é validado contra o repositório ANTES de ser gravado.
+//
+//   mm-ctl token            → pede o token e grava
+//   mm-ctl token --apagar   → remove o token desta máquina
+import * as cofre from "../src/segredos.js";
+import { API_REPO, getJson } from "../src/github.js";
+
+const ENTER = ["\n", "\r"];
+const CTRL_C = "\u0003";
+const CTRL_D = "\u0004";
+const BACKSPACE = ["\u007f", "\b"];
+
+/**
+ * Lê o token sem ecoar. Sem readline, pelo mesmo motivo do mm-login: com
+ * `terminal: true` ele ecoa as teclas mesmo em modo raw. Percorre caractere
+ * por caractere porque um token colado chega num pedaço só, às vezes já com
+ * o Enter no fim.
+ */
+function perguntarOculto(texto) {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+    if (!stdin.isTTY) {
+      console.error("\n  ✗ mm-token precisa de um terminal interativo.");
+      process.exit(1);
+    }
+    process.stdout.write(texto);
+    const eraRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+
+    let valor = "";
+    const restaurar = () => {
+      stdin.setRawMode(eraRaw);
+      stdin.removeListener("data", aoDigitar);
+      stdin.pause();
+      process.stdout.write("\n");
+    };
+    const aoDigitar = (pedaco) => {
+      for (const c of pedaco.toString("utf8")) {
+        if (ENTER.includes(c) || c === CTRL_D) { restaurar(); return resolve(valor.trim()); }
+        if (c === CTRL_C) { restaurar(); process.exit(130); }
+        if (BACKSPACE.includes(c)) valor = valor.slice(0, -1);
+        else valor += c;
+      }
+    };
+    stdin.on("data", aoDigitar);
+  });
+}
+
+const principal = async () => {
+  if (process.argv.includes("--apagar")) {
+    const apagou = await cofre.apagar(cofre.SERVICOS.github);
+    console.log(apagou ? "  ✓ Token do GitHub removido desta máquina." : "  Não havia token guardado.");
+    return;
+  }
+
+  console.log("\n  mm-notify — token do GitHub para a atualização automática\n");
+  console.log("  Crie um token de leitura em:");
+  console.log("    https://github.com/settings/personal-access-tokens/new");
+  console.log("  Repository access: Only select repositories → mattermost-notificacoes-macos");
+  console.log("  Permissions → Repository → Contents: Read-only\n");
+
+  const token = await perguntarOculto("  Cole o token (não aparece enquanto você digita): ");
+  if (!token) {
+    console.error("  ✗ Nenhum token informado.");
+    process.exit(1);
+  }
+
+  process.stdout.write("  Conferindo acesso ao repositório… ");
+  try {
+    await getJson(API_REPO, token);
+  } catch (e) {
+    console.log("falhou.");
+    console.error(
+      e.status === 401 ? "  ✗ Token inválido ou expirado." :
+      e.status === 404 || e.status === 403 ? "  ✗ O token não enxerga o repositório. Confira o acesso a mattermost-notificacoes-macos e a permissão Contents: Read-only." :
+      `  ✗ ${e.message}`,
+    );
+    process.exit(1);
+  }
+  console.log("ok.");
+
+  await cofre.gravar(cofre.SERVICOS.github, token);
+  console.log(`  ✓ Token guardado no ${cofre.NOME_COFRE}.`);
+  console.log("\n  Para atualizar agora:  mm-ctl atualizar --force\n");
+};
+
+principal().catch((e) => {
+  console.error(`  ✗ ${e.message}`);
+  process.exit(1);
+});

@@ -23,6 +23,7 @@ export const SERVICOS = {
   senha: "mm-notify-password",
   token: "mm-notify-token",
   usuarioId: "mm-notify-userid",
+  github: "mm-notify-github",   // token de leitura do repositório, para o atualizador
 };
 
 // ------------------------------------------------------------------ macOS
