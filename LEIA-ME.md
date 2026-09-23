@@ -30,16 +30,11 @@ Antes, no Mac novo:
 Depois:
 
 1. Com a conta do GitHub aberta no navegador, baixe o `MM-Notify-vX.Y.Z.zip` da [release mais recente](https://github.com/cauarat/mattermost-notificacoes-macos/releases/latest).
-2. No Terminal, troque `X.Y.Z` pela versão baixada:
+2. No Terminal, cole o comando abaixo. Ele acha sozinho o que o navegador baixou em Downloads, seja o zip ou a pasta que o Safari descompacta, com o nome que tiver:
 
 ```bash
-cd ~ && mkdir -p mm-notify \
-  && unzip -o -q ~/Downloads/MM-Notify-vX.Y.Z.zip -d mm-notify \
-  && cd mm-notify && bash instalar.sh
+cd ~ && Z="$(ls -t ~/Downloads/MM-Notify*.zip 2>/dev/null | head -1)"; P="$(ls -td ~/Downloads/MM-Notify*/ 2>/dev/null | head -1)"; mkdir -p ~/mm-notify && if [ -n "$Z" ]; then unzip -o -q "$Z" -d ~/mm-notify; elif [ -n "$P" ]; then cp -R "$P". ~/mm-notify/; fi; cd ~/mm-notify && bash instalar.sh
 ```
-
-Se o Safari já tiver descompactado o zip (fica uma pasta `MM-Notify-vX.Y.Z` em Downloads), troque a linha do `unzip` por
-`&& cp -R ~/Downloads/MM-Notify-vX.Y.Z/ mm-notify/ \`.
 
 O instalador confere os pré-requisitos, compila o popup, pede o login do Mattermost, sobe o serviço, testa com uma mensagem real e, por último, pede o token do GitHub. Daí em diante o daemon sobe sozinho a cada login, e as versões novas chegam sozinhas.
 
