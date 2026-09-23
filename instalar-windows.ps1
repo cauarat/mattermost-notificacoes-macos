@@ -33,7 +33,7 @@ Write-Host "  OK logs/"
 
 Passo "Testando o popup"
 Write-Host "  Um popup de teste deve aparecer no canto da tela."
-$json = '{"tipo":"dm","remetente":"mm-notify","canal":"Instalacao","corpo":"Se voce esta vendo isto, o popup funciona neste sistema.","volume":0.8,"somAtivado":true,"duracao":6,"linkWeb":""}'
+$json = '{"tipo":"dm","remetente":"mm-notify","canal":"Instalacao","corpo":"Se voce esta vendo isto, o popup funciona neste sistema.","volume":0.8,"somAtivado":true,"linkWeb":""}'
 $script = Join-Path $RAIZ 'mmpopup\popup-windows.ps1'
 $proc = Start-Process powershell -PassThru -NoNewWindow -ArgumentList `
   '-NoProfile','-ExecutionPolicy','Bypass','-File',$script `

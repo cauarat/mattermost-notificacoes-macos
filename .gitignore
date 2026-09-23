@@ -13,3 +13,6 @@ node_modules/
 
 # Pacotes gerados para distribuição
 *.zip
+
+# Python
+__pycache__/

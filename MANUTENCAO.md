@@ -251,12 +251,15 @@ Também aceita caminho para um arquivo próprio.
 
 Os popups continuam aparecendo, mudos.
 
-### Popup mais demorado, ou mais discreto
+### Popup mais discreto
 
 ```json
-"duracaoPopupSegundos": 20,
 "som": { "volume": 0.4 }
 ```
+
+O popup não tem duração: fica até você clicar nele (abre a conversa) ou no X
+(só fecha). Um `duracaoPopupSegundos` que tenha sobrado num `config.json`
+antigo é ignorado.
 
 ### Insistir quando você sai da frente
 

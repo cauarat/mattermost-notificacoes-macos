@@ -1,7 +1,6 @@
 {
   "servidor": "https://team.actuar.group",
   "canaisMonitorados": [],
-  "duracaoPopupSegundos": 12,
   "notificacaoNativa": true,
   "posicao": "superior-direito",
   "som": {
@@ -19,7 +18,7 @@
     }
   },
   "_interno": {
-    "versaoInstalada": "1.0.0",
+    "versaoInstalada": "1.2.0",
     "ultimaVerificacao": null
   }
 }

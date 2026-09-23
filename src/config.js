@@ -10,7 +10,6 @@ export const RAIZ = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PADRAO = {
   servidor: "https://team.actuar.group",
   canaisMonitorados: [],
-  duracaoPopupSegundos: 12,
   notificacaoNativa: true,
   posicao: "superior-direito",
   som: {

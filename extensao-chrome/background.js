@@ -111,7 +111,8 @@ async function alertar(veredito, dados, config) {
     message: corpo || "(mensagem sem texto)",
     contextMessage: canal,
     priority: 2,
-    requireInteraction: false,
+    // Fica até ser clicada (abre a conversa) ou fechada no X.
+    requireInteraction: true,
   });
 
   if (config.som.ativado) tocarSom(veredito.tipo, config.som.volume);

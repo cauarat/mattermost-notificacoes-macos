@@ -162,6 +162,8 @@ async function main() {
   const args = process.argv.slice(2);
   const apenasChecar = args.includes("--checar") || args.includes("--check");
   const forcar = args.includes("--force") || args.includes("-f");
+  // --auto: chamada do serviço periódico (com.cauatoledo.mmnotify.atualizar).
+  const automatico = args.includes("--auto");
 
   const raiz = acharRaiz();
   log(`Diretório de instalação: ${raiz}`);
@@ -172,6 +174,14 @@ async function main() {
 
   const { caminho: cfgPath, cfg } = lerConfig(raiz);
   cfg._interno = cfg._interno || {};
+
+  if (automatico) {
+    log(`Verificação automática em ${new Date().toLocaleString()}.`);
+    if (cfg.atualizacaoAutomatica === false) {
+      log("atualizacaoAutomatica está false no config.json; nada a fazer.");
+      process.exit(0);
+    }
+  }
 
   // 1. Cache de verificação (rate limit da API: 60 req/h por IP sem auth).
   const agora = Date.now();

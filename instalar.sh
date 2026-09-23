@@ -122,10 +122,12 @@ fi
 
 # --------------------------------------------------------- caminhos do plist
 passo "Ajustando o serviço para esta máquina"
-PLIST="$RAIZ/com.cauatoledo.mmnotify.plist"
-# O plist agora usa `node` por nome + EnvironmentVariables.PATH; só os paths
-# internos do projeto (raiz e src/index.js) precisam ser patchados.
-python3 - "$PLIST" "$RAIZ" <<'PY'
+# Dois plists: o do daemon e o da atualização automática. Ambos usam `node`
+# por nome + EnvironmentVariables.PATH; só os paths internos do projeto
+# precisam ser patchados.
+for PLIST in "$RAIZ/com.cauatoledo.mmnotify.plist" "$RAIZ/com.cauatoledo.mmnotify.atualizar.plist"; do
+  [ -f "$PLIST" ] || continue
+  python3 - "$PLIST" "$RAIZ" <<'PY'
 import sys, re, pathlib
 plist, raiz = sys.argv[1], sys.argv[2]
 p = pathlib.Path(plist); s = p.read_text()
@@ -133,10 +135,11 @@ s = re.sub(r"<string>[^<]*/mm-notify(/[^<]*)?</string>",
            lambda m: f"<string>{raiz}{m.group(1) or ''}</string>", s)
 p.write_text(s)
 PY
-plutil -lint "$PLIST" >/dev/null && echo "  ✓ plist ajustado para $RAIZ" || {
-  echo "  ✗ plist ficou inválido após patch"
-  exit 4
-}
+  plutil -lint "$PLIST" >/dev/null && echo "  ✓ $(basename "$PLIST") ajustado para $RAIZ" || {
+    echo "  ✗ $(basename "$PLIST") ficou inválido após patch"
+    exit 4
+  }
+done
 
 # --------------------------------------------------------------------- login
 # Em modo --atualizar, exigir que as credenciais já existam. Se não existirem,

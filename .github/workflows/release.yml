@@ -21,6 +21,22 @@ jobs:
       - name: Set version from tag
         run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
+      - name: Carimbar versão da tag em package.json e config.json
+        # Sem isto o zip sai com a versão que estiver no repositório, e uma
+        # instalação nova se acharia desatualizada e baixaria a mesma release.
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          node -e '
+            const fs = require("fs"), v = process.argv[1];
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.version = v;
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            const cfg = JSON.parse(fs.readFileSync("config.json", "utf8"));
+            cfg._interno = { ...(cfg._interno ?? {}), versaoInstalada: v, ultimaVerificacao: null };
+            fs.writeFileSync("config.json", JSON.stringify(cfg, null, 2) + "\n");
+          ' "$V"
+          grep -n '"version"' package.json; grep -n versaoInstalada config.json
+
       - name: Build Swift popup (injeta versão)
         run: TAG=${{ github.ref_name }} bash mmpopup/build.sh
 

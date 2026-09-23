@@ -7,6 +7,10 @@
 //
 // O popup é um NSPanel, não uma notificação: é por isso que Foco / Não
 // Perturbe não conseguem escondê-lo. É essa a garantia central do sistema.
+//
+// Ele não some sozinho: fica na tela até você clicar nele (abre a conversa)
+// ou no X (só fecha). Um alerta que desaparece enquanto você está longe do
+// Mac é um alerta perdido.
 
 import AppKit
 import QuartzCore          // CAMediaTimingFunction (o AppKit reexporta, mas explícito não custa)
@@ -40,14 +44,13 @@ struct Alerta: Decodable {
     var volume: Float = 0.8
     var somAtivado = true
     var insistir = ConfigInsistir()
-    var duracao: Double = 12
     var nativa = true
     var link = ""
     var linkWeb = ""
 
     enum CodingKeys: String, CodingKey {
         case tipo, remetente, canal, corpo, som, volume, somAtivado
-        case insistir, duracao, nativa, link, linkWeb
+        case insistir, nativa, link, linkWeb
     }
 
     init(from decoder: Decoder) throws {
@@ -60,7 +63,6 @@ struct Alerta: Decodable {
         volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 0.8
         somAtivado = try c.decodeIfPresent(Bool.self, forKey: .somAtivado) ?? true
         insistir = try c.decodeIfPresent(ConfigInsistir.self, forKey: .insistir) ?? ConfigInsistir()
-        duracao = try c.decodeIfPresent(Double.self, forKey: .duracao) ?? 12
         nativa = try c.decodeIfPresent(Bool.self, forKey: .nativa) ?? true
         link = try c.decodeIfPresent(String.self, forKey: .link) ?? ""
         linkWeb = try c.decodeIfPresent(String.self, forKey: .linkWeb) ?? ""
@@ -125,18 +127,63 @@ final class AreaClicavel: NSView {
     override var isFlipped: Bool { true }
 }
 
+/// O X do canto: fecha o popup sem abrir a conversa.
+///
+/// Desenhado à mão em vez de um NSButton porque o NSButton não aceita o
+/// primeiro clique num painel sem foco — o X precisaria de dois cliques.
+final class BotaoFechar: NSView {
+    var aoClicar: (() -> Void)?
+    private var sobre = false { didSet { needsDisplay = true } }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        toolTip = "Fechar"
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Fechar")
+        // .activeAlways: o painel nunca vira janela ativa, e sem isto o
+        // destaque de hover não acenderia.
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self, userInfo: nil
+        ))
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) não usado") }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) { aoClicar?() }
+    override func accessibilityPerformPress() -> Bool { aoClicar?(); return true }
+
+    override func mouseEntered(with event: NSEvent) { sobre = true }
+    override func mouseExited(with event: NSEvent) { sobre = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if sobre {
+            NSColor.labelColor.withAlphaComponent(0.12).setFill()
+            NSBezierPath(ovalIn: bounds).fill()
+        }
+        let lado: CGFloat = 7
+        let r = NSRect(x: bounds.midX - lado / 2, y: bounds.midY - lado / 2,
+                       width: lado, height: lado)
+        let x = NSBezierPath()
+        x.move(to: NSPoint(x: r.minX, y: r.minY)); x.line(to: NSPoint(x: r.maxX, y: r.maxY))
+        x.move(to: NSPoint(x: r.minX, y: r.maxY)); x.line(to: NSPoint(x: r.maxX, y: r.minY))
+        x.lineWidth = 1.6
+        x.lineCapStyle = .round
+        (sobre ? NSColor.labelColor : NSColor.secondaryLabelColor).setStroke()
+        x.stroke()
+    }
+}
+
 // MARK: - Popup
 
 final class Popup {
     let painel: NSPanel
     let alerta: Alerta
-    private var timerFechar: Timer?
-    private var timerContagem: Timer?
     private var timerInsistir: Timer?
     private var somAtual: NSSound?          // precisa ficar retido enquanto toca
     private var repeticoes = 0
-    private var restante: Int
-    private let rotuloContagem = NSTextField(labelWithString: "")
     private var fechando = false
 
     static let largura: CGFloat = 380
@@ -145,7 +192,6 @@ final class Popup {
 
     init(alerta: Alerta) {
         self.alerta = alerta
-        self.restante = Int(alerta.duracao.rounded())
 
         let altura = Popup.calcularAltura(alerta: alerta)
 
@@ -214,19 +260,15 @@ final class Popup {
         let x: CGFloat = 16
         var y: CGFloat = 14
 
-        // Cabeçalho: tipo do alerta + contagem regressiva
+        // Cabeçalho: tipo do alerta + botão de fechar
         let tipo = NSTextField(labelWithString: alerta.rotuloTipo)
         tipo.font = .systemFont(ofSize: 9, weight: .bold)
         tipo.textColor = alerta.cor
         tipo.frame = NSRect(x: x, y: y, width: 220, height: 12)
         raiz.addSubview(tipo)
 
-        rotuloContagem.stringValue = "\(restante)s"
-        rotuloContagem.font = .systemFont(ofSize: 9, weight: .medium)
-        rotuloContagem.textColor = .tertiaryLabelColor
-        rotuloContagem.alignment = .right
-        rotuloContagem.frame = NSRect(x: Popup.largura - 60, y: y, width: 44, height: 12)
-        raiz.addSubview(rotuloContagem)
+        let botaoFechar = BotaoFechar(frame: NSRect(x: Popup.largura - 30, y: 8, width: 22, height: 22))
+        botaoFechar.aoClicar = { [weak self] in self?.fechar() }
 
         y += 12 + 6
 
@@ -261,6 +303,9 @@ final class Popup {
                              width: Popup.larguraTexto,
                              height: Popup.alturaTexto(alerta.corpo))
         raiz.addSubview(corpo)
+
+        // Por último: fica por cima de tudo, e é ele quem recebe o clique.
+        raiz.addSubview(botaoFechar)
 
         painel.contentView = raiz
     }
@@ -311,16 +356,6 @@ final class Popup {
     }
 
     private func iniciarTimers() {
-        timerContagem = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.restante -= 1
-            self.rotuloContagem.stringValue = "\(max(self.restante, 0))s"
-        }
-
-        timerFechar = Timer.scheduledTimer(withTimeInterval: alerta.duracao, repeats: false) { [weak self] _ in
-            self?.fechar()
-        }
-
         if alerta.somAtivado && alerta.insistir.ativado && alerta.insistir.maximo > 1 {
             timerInsistir = Timer.scheduledTimer(
                 withTimeInterval: max(alerta.insistir.intervaloSegundos, 1), repeats: true
@@ -361,8 +396,6 @@ final class Popup {
     func fechar() {
         guard !fechando else { return }
         fechando = true
-        timerFechar?.invalidate()
-        timerContagem?.invalidate()
         timerInsistir?.invalidate()
         somAtual?.stop()
 

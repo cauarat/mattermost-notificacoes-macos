@@ -49,7 +49,6 @@ export function montarAlerta({ tipo, post, data, servidor, time, cfg }) {
     volume: cfg.som.volume,
     somAtivado: cfg.som.ativado,
     insistir: cfg.som.insistir,
-    duracao: cfg.duracaoPopupSegundos,
     nativa: cfg.notificacaoNativa,
     // O app desktop registra o esquema mattermost://; o https é o plano B.
     link: rota ? `mattermost://${host}/${rota}` : `${servidor}`,
