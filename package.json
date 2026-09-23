@@ -1,6 +1,6 @@
 {
   "name": "mm-notify",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Notificações em tempo real do Mattermost para macOS — popup sobreposto + banner nativo + som",
   "type": "module",
   "private": true,

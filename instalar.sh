@@ -89,6 +89,9 @@ passo "Preparando pastas e permissões"
 # Descompactar pelo Finder pode perder o bit de execução dos scripts.
 chmod +x "$RAIZ"/bin/* "$RAIZ"/mmpopup/build.sh "$RAIZ"/instalar.sh 2>/dev/null
 echo "  ✓ scripts executáveis"
+# O zip baixado pelo navegador marca tudo com quarentena, e o Gatekeeper
+# barraria os programas na primeira execução.
+xattr -dr com.apple.quarantine "$RAIZ" 2>/dev/null && echo "  ✓ quarentena do download removida"
 # O launchd falha ao iniciar se o diretório do StandardOutPath não existir.
 mkdir -p "$RAIZ/logs"
 echo "  ✓ logs/"
@@ -114,9 +117,12 @@ done
 echo "  ✓ mm-ctl, mm-login, mm-test, mm-verificar em ~/.local/bin"
 
 if [ "$MODO_ATUALIZAR" = 0 ]; then
-  if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
-    echo "  ⚠ ~/.local/bin não está no PATH. Adicione ao seu ~/.zshrc:"
-    echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+  # Num Mac novo ~/.local/bin não está no PATH, e mm-ctl daria "command not
+  # found". Acrescenta ao ~/.zshrc (o shell padrão do macOS) uma única vez.
+  LINHA_PATH='export PATH="$HOME/.local/bin:$PATH"'
+  if ! grep -qsF "$LINHA_PATH" "$HOME/.zshrc"; then
+    printf '\n# mm-notify: comandos mm-ctl, mm-login, mm-test...\n%s\n' "$LINHA_PATH" >> "$HOME/.zshrc"
+    echo "  ✓ ~/.local/bin adicionado ao PATH no ~/.zshrc (vale nas próximas janelas do Terminal)"
   fi
 fi
 
@@ -218,12 +224,18 @@ PY
 fi
 
 # O repositório é privado: sem token do GitHub a atualização automática não
-# enxerga as releases.
+# enxerga as releases. Na primeira instalação já pede o token; numa
+# atualização (que pode estar rodando sozinha) só avisa.
 if ! security find-generic-password -a mm-notify -s mm-notify-github >/dev/null 2>&1 \
    && ! gh auth token >/dev/null 2>&1; then
-  echo ""
-  echo "  ⚠ Atualização automática sem token do GitHub. Para ativá-la, rode:"
-  echo "      mm-ctl token"
+  if [ "$MODO_ATUALIZAR" = 0 ]; then
+    passo "Token do GitHub (atualização automática)"
+    "$RAIZ/bin/mm-token" --opcional
+  else
+    echo ""
+    echo "  ⚠ Atualização automática sem token do GitHub. Para ativá-la, rode:"
+    echo "      mm-ctl token"
+  fi
 fi
 
 echo ""

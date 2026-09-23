@@ -21,30 +21,27 @@ O `mm-notify` resolve isso por fora, e de quebra dá controle que o app não ofe
 
 ## Instalação
 
-Baixe o `MM-Notify-vX.Y.Z.zip` da página de [Releases](https://github.com/cauarat/mattermost-notificacoes-macos/releases/latest) e descompacte. Você verá um `MM-Notify.app` junto com o resto do projeto.
+Antes, no Mac novo:
+
+- **Node.js 22 ou maior:** instalador em <https://nodejs.org> (versão LTS).
+- **Ferramentas de linha de comando da Apple**, para compilar o popup: rode `xcode-select --install` no Terminal e aceite.
+- **Um token do GitHub só de leitura**, porque o repositório é privado. Crie em <https://github.com/settings/personal-access-tokens/new>: *Repository access* → só `mattermost-notificacoes-macos`; *Permissions* → *Contents: Read-only*.
+
+Depois:
+
+1. Com a conta do GitHub aberta no navegador, baixe o `MM-Notify-vX.Y.Z.zip` da [release mais recente](https://github.com/cauarat/mattermost-notificacoes-macos/releases/latest).
+2. No Terminal, troque `X.Y.Z` pela versão baixada:
 
 ```bash
-# 1. Mover o .app para a pasta de Aplicações do seu usuário
-mkdir -p ~/Applications
-mv MM-Notify.app ~/Applications/
-
-# 2. Duplo-clique no .app (ou abra do Finder).
-#    Primeira vez: clique com botão direito → Abrir (Gatekeeper em apps
-#    ad-hoc-signed). O Terminal vai abrir pedindo suas credenciais do Mattermost.
+cd ~ && mkdir -p mm-notify \
+  && unzip -o -q ~/Downloads/MM-Notify-vX.Y.Z.zip -d mm-notify \
+  && cd mm-notify && bash instalar.sh
 ```
 
-Após isso, o daemon sobe sozinho a cada login, e as versões novas chegam sozinhas (veja [Atualizações](#atualizações)).
+Se o Safari já tiver descompactado o zip (fica uma pasta `MM-Notify-vX.Y.Z` em Downloads), troque a linha do `unzip` por
+`&& cp -R ~/Downloads/MM-Notify-vX.Y.Z/ mm-notify/ \`.
 
-> Se preferir a linha de comando, o caminho antigo continua funcionando:
->
-> ```bash
-> cd ~/mm-notify
-> bash instalar.sh          # primeira vez
-> mm-ctl atualizar          # para atualizar
-> ```
->
-> O instalador detecta automaticamente se é primeira instalação (pede login)
-> ou atualização (pula o login, recompila o popup, reinstala o serviço).
+O instalador confere os pré-requisitos, compila o popup, pede o login do Mattermost, sobe o serviço, testa com uma mensagem real e, por último, pede o token do GitHub. Daí em diante o daemon sobe sozinho a cada login, e as versões novas chegam sozinhas.
 
 ## Atualizações
 
