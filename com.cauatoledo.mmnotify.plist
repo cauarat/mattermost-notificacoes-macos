@@ -5,11 +5,11 @@
     <key>Label</key>
     <string>com.cauatoledo.mmnotify</string>
 
-    <!-- O launchd não herda o PATH do shell. Setamos um PATH completo no
-         EnvironmentVariables abaixo — cobre Homebrew (Apple Silicon e Intel),
-         /usr/local e o resto do sistema. O node é resolvido por nome, não por
-         caminho absoluto, então mover o Node entre gerenciadores (nvm, volta,
-         Homebrew) não exige repatch. -->
+    <!-- "node" aqui é só um marcador: o `mm-ctl instalar` troca pelo caminho
+         absoluto do node desta máquina ao copiar o arquivo para
+         ~/Library/LaunchAgents. O launchd não usa o PATH abaixo para achar o
+         programa, e com "node" solto o serviço nem sobe. O PATH continua
+         valendo para o que o daemon executa (osascript, python3...). -->
     <key>ProgramArguments</key>
     <array>
         <string>node</string>
