@@ -11,6 +11,7 @@
 //
 //   mm-ctl token            → pede o token e grava
 //   mm-ctl token --apagar   → remove o token desta máquina
+//   --opcional              → Enter vazio pula (usado pelo instalar.sh)
 import * as cofre from "../src/segredos.js";
 import { API_REPO, getJson } from "../src/github.js";
 
@@ -69,25 +70,38 @@ const principal = async () => {
   console.log("  Repository access: Only select repositories → mattermost-notificacoes-macos");
   console.log("  Permissions → Repository → Contents: Read-only\n");
 
-  const token = await perguntarOculto("  Cole o token (não aparece enquanto você digita): ");
-  if (!token) {
-    console.error("  ✗ Nenhum token informado.");
-    process.exit(1);
-  }
+  const opcional = process.argv.includes("--opcional");
+  if (opcional) console.log("  (Enter vazio pula; dá para configurar depois com: mm-ctl token)\n");
 
-  process.stdout.write("  Conferindo acesso ao repositório… ");
-  try {
-    await getJson(API_REPO, token);
-  } catch (e) {
-    console.log("falhou.");
-    console.error(
-      e.status === 401 ? "  ✗ Token inválido ou expirado." :
-      e.status === 404 || e.status === 403 ? "  ✗ O token não enxerga o repositório. Confira o acesso a mattermost-notificacoes-macos e a permissão Contents: Read-only." :
-      `  ✗ ${e.message}`,
-    );
-    process.exit(1);
+  // Três tentativas: um token colado errado não deveria obrigar a recomeçar.
+  let token = "";
+  for (let tentativa = 1; ; tentativa++) {
+    token = await perguntarOculto("  Cole o token (não aparece enquanto você digita): ");
+    if (!token) {
+      if (opcional) {
+        console.log("  Pulado. Sem token, as atualizações não chegam sozinhas: rode mm-ctl token depois.");
+        return;
+      }
+      console.error("  ✗ Nenhum token informado.");
+      process.exit(1);
+    }
+
+    process.stdout.write("  Conferindo acesso ao repositório… ");
+    try {
+      await getJson(API_REPO, token);
+      console.log("ok.");
+      break;
+    } catch (e) {
+      console.log("falhou.");
+      console.error(
+        e.status === 401 ? "  ✗ Token inválido ou expirado." :
+        e.status === 404 || e.status === 403 ? "  ✗ O token não enxerga o repositório. Confira o acesso a mattermost-notificacoes-macos e a permissão Contents: Read-only." :
+        `  ✗ ${e.message}`,
+      );
+      if (tentativa >= 3) process.exit(opcional ? 0 : 1);
+      console.log("  Tente de novo.\n");
+    }
   }
-  console.log("ok.");
 
   await cofre.gravar(cofre.SERVICOS.github, token);
   console.log(`  ✓ Token guardado no ${cofre.NOME_COFRE}.`);
